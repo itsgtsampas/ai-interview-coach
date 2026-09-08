@@ -1,0 +1,10 @@
+# Anchored to the backend root: an unanchored "data/" would also match
+# evals/data/, silently excluding the golden set the evaluation depends on.
+/data/
+.venv/
+__pycache__/
+*.py[cod]
+.env
+*.db
+.pytest_cache/
+.DS_Store

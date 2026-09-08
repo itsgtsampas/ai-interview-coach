@@ -1,0 +1,22 @@
+SENIOR FRONTEND ENGINEER
+Kyma Interactive - Athens, hybrid
+
+ABOUT THE ROLE
+We build the booking experience used by several thousand travellers a day. You
+will own the front end of that journey.
+
+REQUIREMENTS
+Strong commercial experience with React and TypeScript in production applications.
+Experience building and maintaining a shared component library or design system.
+Demonstrated attention to web performance, including bundle size and load time.
+Practical knowledge of web accessibility standards such as WCAG.
+Experience writing end-to-end or integration tests for user journeys.
+Comfortable collaborating directly with designers.
+
+NICE TO HAVE
+Experience with server-side rendering, for example Next.js.
+Familiarity with WebGL or canvas-based visualisation.
+Experience mentoring junior engineers.
+
+WHAT WE OFFER
+Hybrid working, a learning budget, and a genuinely good coffee machine.

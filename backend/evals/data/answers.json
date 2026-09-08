@@ -1,0 +1,120 @@
+{
+  "_comment": [
+    "Hand-scored interview answers. expected_score is my judgement on the same 1-5",
+    "scale the rubric uses, written before running the system against them.",
+    "The pairs list encodes ordering judgements that are much more robust than the",
+    "absolute numbers: whatever the calibration, the better answer must score higher."
+  ],
+  "answers": [
+    {
+      "id": "tech-strong",
+      "rubric": "technical",
+      "question": "You list PostgreSQL at scale. Walk me through the hardest decision you made there.",
+      "requirement": "Proven experience designing and operating PostgreSQL databases at scale, including query optimisation and schema migration",
+      "expected_score": 5,
+      "text": "The orders table passed 400 million rows and our monthly reporting queries went from 4 seconds to over 90. I owned the schema, so I had to choose between adding covering indexes, moving reporting to a read replica, or partitioning. Indexes alone would not have helped because the queries scanned whole date ranges, and a replica would have moved the cost rather than removed it. I partitioned by month using declarative partitioning, which meant the planner could prune to a single partition for the common case. The migration was the risky part: I wrote it as an online backfill in 2 million row batches with a switchover behind a feature flag, so we never took a write lock longer than 50ms. Reporting queries came back at 1.2 seconds and the nightly job stopped timing out. The trade-off was that cross-month queries got slightly slower, which we accepted because they were 3 percent of traffic."
+    },
+    {
+      "id": "tech-good",
+      "rubric": "technical",
+      "question": "Tell me about optimising an API endpoint.",
+      "requirement": "Strong commercial experience with Python, ideally with FastAPI or a comparable async framework",
+      "expected_score": 4,
+      "text": "Our checkout endpoint had a p99 of 840ms. I profiled it and found we opened a new database connection on every request. I introduced connection pooling and moved the hot path to async I/O in FastAPI. I chose pooling over read replicas because the bottleneck was connection setup rather than read capacity. p99 dropped to 210ms over three weeks on the same dashboard."
+    },
+    {
+      "id": "tech-middling",
+      "rubric": "technical",
+      "question": "How do you approach testing?",
+      "requirement": "Experience building and maintaining CI/CD pipelines",
+      "expected_score": 3,
+      "text": "I write unit tests for the business logic and integration tests for the API layer. On my last project we used pytest and ran everything in GitHub Actions on every pull request. We had reasonable coverage on the payments module and it caught a few regressions before release. I think tests are worth the time even when they slow you down at the start."
+    },
+    {
+      "id": "tech-weak",
+      "rubric": "technical",
+      "question": "The role requires Kubernetes. How would you get productive with it?",
+      "requirement": "Production experience with Kubernetes for container orchestration and workload scheduling",
+      "expected_score": 2,
+      "text": "I have not used Kubernetes in production, but I have used Docker a lot so I think it would be fine and I would pick it up quickly."
+    },
+    {
+      "id": "tech-poor",
+      "rubric": "technical",
+      "question": "How do you design a database schema?",
+      "requirement": "Proven experience designing and operating PostgreSQL databases at scale",
+      "expected_score": 1,
+      "text": "I usually just look at what the application needs and make tables for it."
+    },
+    {
+      "id": "tech-verbose-empty",
+      "rubric": "technical",
+      "question": "Tell me about your experience with observability.",
+      "requirement": "Experience with observability: structured logging, metrics and distributed tracing",
+      "expected_score": 2,
+      "note": "Long but says nothing concrete. Guards against rewarding length alone.",
+      "text": "Observability is really important to me and I think it is something that a lot of teams get wrong. In my experience you need to have good visibility into what your system is doing, otherwise you are flying blind when something goes wrong. I have always tried to make sure that the services I work on are properly instrumented and that we have the dashboards we need. It is also about culture as much as tooling, because if nobody looks at the dashboards then it does not matter how good they are. I would say observability is one of the areas I care most about in backend work."
+    },
+    {
+      "id": "behav-strong",
+      "rubric": "star",
+      "question": "Tell me about a time you disagreed with a technical decision your team had already committed to.",
+      "requirement": "Influence and disagreement",
+      "expected_score": 5,
+      "text": "At Nexora the team had committed to moving the whole checkout flow to a third-party payments SDK, and the migration was already two sprints in. I was responsible for the checkout service, and when I read the SDK contract I found it did not support idempotency keys, which meant a retry after a network timeout could double-charge a customer. I raised it at the sprint review with a written comparison rather than in the moment, because I wanted the argument to stand on evidence rather than on me being loud. I built a small proof of concept showing the double-charge in about forty minutes. The team agreed to keep our own payment orchestration and use the SDK only for card tokenisation. It cost us about a week of rework. Six months later we had two incidents where retries fired, and neither one double-charged, which would not have been true the other way."
+    },
+    {
+      "id": "behav-good",
+      "rubric": "star",
+      "question": "Describe something you shipped that did not have the impact you expected.",
+      "requirement": "Ownership and learning",
+      "expected_score": 4,
+      "text": "I built a caching layer for our product catalogue because we assumed reads were the bottleneck. I owned the work end to end. After we shipped it, the latency numbers barely moved. When I looked properly at the traces, the time was going on an N+1 query in the pricing service, not on catalogue reads. I removed the cache rather than keep the complexity, and fixed the N+1 instead, which took p95 from 600ms to 180ms. The lesson I took was to measure before building, and I now insist on a trace before any performance work."
+    },
+    {
+      "id": "behav-middling",
+      "rubric": "star",
+      "question": "Tell me about a time you had to deliver against a moving deadline.",
+      "requirement": "Prioritisation under pressure",
+      "expected_score": 3,
+      "text": "We had a release deadline for a client demo and the requirements kept changing. I sat down with the product manager and we agreed on what was essential and what could wait. I focused on the core flow first and left the reporting screen for after the demo. We got it done in time and the client was happy with what they saw."
+    },
+    {
+      "id": "behav-weak",
+      "rubric": "star",
+      "question": "Tell me about the last production problem you were responsible for.",
+      "requirement": "Incident ownership",
+      "expected_score": 2,
+      "text": "We had an outage once and the team worked together to fix it. It was stressful but we got through it and afterwards we made some improvements so it would not happen again."
+    },
+    {
+      "id": "behav-we-not-i",
+      "rubric": "star",
+      "question": "Describe a time you inherited code you thought was wrong.",
+      "requirement": "Pragmatism",
+      "expected_score": 2,
+      "note": "Real content, but hides behind 'we' throughout — the individual contribution is invisible.",
+      "text": "We took over a legacy service from another team and we found that the whole thing was built on a shared mutable global state, which we felt was risky. We discussed it and we decided that we would refactor it incrementally rather than rewrite. We split the state into per-request context and we did it over about six sprints. We were pleased with the result and the on-call load went down."
+    },
+    {
+      "id": "behav-poor",
+      "rubric": "star",
+      "question": "Describe the piece of work you are most proud of.",
+      "requirement": "Motivation and self-assessment",
+      "expected_score": 1,
+      "text": "I am proud of all my work really, I always try to do a good job."
+    }
+  ],
+  "pairs": [
+    ["tech-strong", "tech-good"],
+    ["tech-good", "tech-middling"],
+    ["tech-middling", "tech-weak"],
+    ["tech-weak", "tech-poor"],
+    ["tech-good", "tech-verbose-empty"],
+    ["behav-strong", "behav-good"],
+    ["behav-good", "behav-middling"],
+    ["behav-middling", "behav-weak"],
+    ["behav-weak", "behav-poor"],
+    ["behav-good", "behav-we-not-i"]
+  ]
+}

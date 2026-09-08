@@ -1,0 +1,22 @@
+Θέμα: Πρόταση Τελικής Εργασίας — AI Interview Coach
+
+Αγαπητέ κύριε Μόσχο,
+
+Σας υποβάλλω την πρότασή μου για την τελική εργασία του προγράμματος.
+
+Τίτλος: AI Interview Coach
+
+Περιγραφή:
+Σύστημα που βοηθά τον χρήστη να προετοιμαστεί για συνεντεύξεις εργασίας. Ο χρήστης ανεβάζει το CV του και μια Job Description σε μορφή PDF, και το σύστημα: αναλύει το match μεταξύ τους μέσω RAG pipeline με ChromaDB, δημιουργεί personalized ερωτήσεις συνέντευξης (technical & behavioral) χρησιμοποιώντας few-shot prompting και chain-of-thought reasoning, αξιολογεί τις απαντήσεις του χρήστη με βάση το PCTF framework και παράγει τελικό scorecard με ανατροφοδότηση και action items.
+
+Τεχνολογίες:
+- Backend: FastAPI
+- Vector Database: ChromaDB
+- LLM: OpenAI API
+- Τεχνικές: RAG, few-shot prompting, chain-of-thought, PCTF evaluation framework, prompt chaining
+
+
+Η εφαρμογή συνδυάζει όλες τις τεχνικές που διδάχθηκαν στο πρόγραμμα σε ένα ολοκληρωμένο pipeline με πραγματική χρηστική αξία. Επεκτείνει τη λογική του Document Q&A bot με multi-step prompt chaining και αξιολόγηση απαντήσεων, αξιοποιώντας πλήρως τα εργαλεία του σεμιναρίου.
+
+Με εκτίμηση
+Τσαμπάς Γεώργιος.

@@ -1,0 +1,23 @@
+[project]
+name = "cv-coach-backend"
+version = "1.0.0"
+description = "AI Interview Coach — FastAPI backend"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi[standard]>=0.115.6",
+    "sqlmodel>=0.0.22",
+    "pydantic-settings>=2.7.0",
+    "passlib[bcrypt]>=1.7.4",
+    "bcrypt==4.0.1",
+    "python-jose[cryptography]>=3.3.0",
+    "pypdf>=5.1.0",
+    "chromadb>=0.5.23",
+    "rank-bm25>=0.2.2",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.3.4", "fpdf2>=2.8.2"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["ignore::DeprecationWarning"]

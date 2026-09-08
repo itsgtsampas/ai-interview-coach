@@ -1,0 +1,51 @@
+ELENA ROUSSOU
+Senior Backend Engineer - Athens, Greece
+elena.roussou@example.com | github.com/example
+
+SUMMARY
+Backend engineer with 7 years building and operating Python services for
+high-traffic consumer products. Comfortable owning a service end to end, from
+schema design through to on-call. Most recent work has been on payments and
+order processing.
+
+EXPERIENCE
+
+Senior Backend Engineer, Nexora Commerce (2021 - 2024)
+Owned the order processing service handling 1.2M orders per month.
+Rebuilt the checkout API in Python and FastAPI, replacing a legacy Flask
+service; reduced p99 latency from 840ms to 210ms by moving to async I/O and
+adding connection pooling.
+Designed the PostgreSQL schema for the orders domain, including partitioning by
+month once the table passed 400M rows, and wrote the migration playbook the team
+still uses.
+Introduced RabbitMQ for order events so that fulfilment and invoicing could be
+decoupled from checkout; this cut checkout timeouts by 90 percent.
+Mentored two junior engineers through their first year, running weekly code
+review sessions and pairing on their first production changes.
+Raised test coverage on the payments module from 34 percent to 81 percent using
+pytest, and made the suite a required check before merge.
+
+Backend Engineer, Delphi Analytics (2018 - 2021)
+Built REST APIs in Python and Django for a B2B analytics dashboard used by
+around 300 customer accounts.
+Containerised the application with Docker and wrote the first CI pipeline in
+GitHub Actions, taking deploys from a manual weekly release to daily automated
+deploys.
+Deployed and maintained services on AWS using EC2, S3 and RDS. Set up CloudWatch
+dashboards and alerts for the ingestion pipeline.
+Wrote the internal API style guide adopted across three teams.
+
+Junior Developer, Ionian Software (2017 - 2018)
+Maintained a PHP monolith and wrote the reporting module that replaced a set of
+manual spreadsheets.
+
+EDUCATION
+MSc Computer Science, Athens University of Economics and Business, 2017
+BSc Informatics, University of Piraeus, 2015
+
+TECHNICAL SKILLS
+Languages: Python, SQL, JavaScript, PHP
+Frameworks: FastAPI, Django, Flask, pytest
+Data: PostgreSQL, Redis, RabbitMQ
+Infrastructure: Docker, AWS (EC2, S3, RDS), GitHub Actions, Linux
+Practices: REST API design, code review, pair programming, agile delivery

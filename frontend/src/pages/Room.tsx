@@ -1,0 +1,237 @@
+import { useEffect, useMemo, useState } from "react";
+import { Link, useOutletContext } from "react-router-dom";
+
+import { api, ApiError } from "../api/client";
+import type { Answer, Question, SessionOut } from "../api/types";
+import {
+  Bars, Chip, ErrorBox, Head, Row, Spinner, toneForScore,
+} from "../components/bits";
+
+interface Ctx { session: SessionOut | null; refresh: () => Promise<void> }
+
+function Feedback({ answer }: { answer: Answer }) {
+  const e = answer.evaluation;
+  if (!e) return null;
+  const scores = Object.fromEntries(e.criteria.map((c) => [c.name, c.score]));
+  return (
+    <>
+      <Row
+        margin={
+          <>
+            <span className="label">Score</span>
+            <span className="num" style={{ fontSize: "2rem",
+                 color: `var(--${toneForScore(e.overall_score, 5)})` }}>
+              {e.overall_score.toFixed(1)}
+            </span>
+            <span className="label">out of 5</span>
+            <Chip tone="neutral">{e.rubric === "star" ? "STAR rubric" : "Technical rubric"}</Chip>
+          </>
+        }
+      >
+        <Bars data={scores} max={5} />
+        <details className="disclose">
+          <summary>Why this score</summary>
+          <p className="reasoning">{e.reasoning}</p>
+        </details>
+      </Row>
+
+      <Row margin={<span className="label">What worked</span>}>
+        <ul className="list list--bullet">
+          {e.strengths.map((s) => <li key={s}>{s}</li>)}
+        </ul>
+      </Row>
+
+      <Row margin={<span className="label">Fix next</span>}>
+        <ul className="list list--bullet">
+          {e.improvements.map((s) => <li key={s}>{s}</li>)}
+        </ul>
+      </Row>
+
+      <Row margin={<span className="label">A stronger shape</span>}>
+        <p className="prose" style={{ margin: 0, fontSize: "0.89rem" }}>{e.model_answer}</p>
+      </Row>
+
+      <Row margin={<span className="label">They would ask</span>}>
+        <p className="display h3" style={{ fontWeight: 500 }}>“{e.follow_up_question}”</p>
+      </Row>
+    </>
+  );
+}
+
+export function Room() {
+  const { session, refresh } = useOutletContext<Ctx>();
+  const [questions, setQuestions] = useState<Question[] | null>(null);
+  const [index, setIndex] = useState(0);
+  const [text, setText] = useState("");
+  const [answer, setAnswer] = useState<Answer | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  const [busy, setBusy] = useState(false);
+  const [seconds, setSeconds] = useState(0);
+
+  const current = questions?.[index];
+
+  useEffect(() => {
+    if (!session) return;
+    api.listQuestions(session.id).then(setQuestions).catch(setError);
+  }, [session?.id]);
+
+  // Load any previous answer when moving between questions.
+  useEffect(() => {
+    if (!current) return;
+    setText("");
+    setAnswer(null);
+    setSeconds(0);
+    if (!current.answered) return;
+    api.getAnswer(current.id)
+      .then((a) => { setAnswer(a); setText(a.text); })
+      .catch((err) => { if (!(err instanceof ApiError && err.status === 404)) setError(err); });
+  }, [current?.id]);
+
+  useEffect(() => {
+    if (answer || !current) return;
+    const t = setInterval(() => setSeconds((s) => s + 1), 1000);
+    return () => clearInterval(t);
+  }, [answer, current?.id]);
+
+  const progress = useMemo(
+    () => (questions ? questions.filter((q) => q.answered).length : 0),
+    [questions],
+  );
+
+  async function generate() {
+    if (!session) return;
+    setBusy(true);
+    setError(null);
+    try {
+      setQuestions(await api.generateQuestions(session.id, 5, 3));
+      setIndex(0);
+      await refresh();
+    } catch (err) {
+      setError(err);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function submit() {
+    if (!current) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const a = await api.submitAnswer(current.id, text.trim(), seconds);
+      setAnswer(a);
+      setQuestions((qs) =>
+        qs ? qs.map((q) => (q.id === current.id ? { ...q, answered: true } : q)) : qs);
+      await refresh();
+    } catch (err) {
+      setError(err);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!questions) return <div className="sheet"><Spinner label="Loading questions…" /></div>;
+
+  if (questions.length === 0) {
+    return (
+      <div className="sheet">
+        <Head margin={<span className="label">Stage 2</span>}>
+          <h1 className="display h1">Practice</h1>
+          <p className="prose">
+            Eight questions, drawn from your gap analysis. The requirements with no
+            evidence come first — those are the ones an interviewer will find.
+          </p>
+          <ErrorBox error={error} />
+          <button className="btn" onClick={generate} disabled={busy}>
+            {busy ? "Writing questions…" : "Generate questions"}
+          </button>
+        </Head>
+      </div>
+    );
+  }
+
+  return (
+    <div className="sheet">
+      <Head
+        margin={
+          <>
+            <span className="label">Stage 2</span>
+            <span className="label">{progress} of {questions.length} answered</span>
+          </>
+        }
+      >
+        <h1 className="display h1">Practice</h1>
+        <div className="split">
+          {questions.map((q, i) => (
+            <button
+              key={q.id}
+              className="btn btn--ghost btn--sm"
+              onClick={() => setIndex(i)}
+              aria-current={i === index}
+              style={i === index
+                ? { borderColor: "var(--ink)", background: "var(--paper-3)" }
+                : q.answered ? { color: "var(--strong)", borderColor: "var(--strong)" } : undefined}
+            >
+              {i + 1}
+            </button>
+          ))}
+        </div>
+      </Head>
+
+      {current ? (
+        <>
+          <Row
+            margin={
+              <>
+                <Chip tone="neutral">{current.category}</Chip>
+                <span className="label">Difficulty {current.difficulty}/5</span>
+                {!answer ? (
+                  <span className="label">
+                    {String(Math.floor(seconds / 60)).padStart(2, "0")}:
+                    {String(seconds % 60).padStart(2, "0")}
+                  </span>
+                ) : null}
+              </>
+            }
+          >
+            <h2 className="display h2">{current.text}</h2>
+            <p className="hint" style={{ marginTop: "0.7rem" }}>{current.rationale}</p>
+          </Row>
+
+          <Row margin={<span className="label">Your answer</span>}>
+            <textarea
+              className="textarea"
+              value={text}
+              readOnly={!!answer}
+              placeholder="Answer out loud first, then type what you actually said. Aim for 90 seconds of speech."
+              onChange={(e) => setText(e.target.value)}
+            />
+            <div className="split" style={{ marginTop: "0.7rem" }}>
+              {!answer ? (
+                <button className="btn" onClick={submit} disabled={busy || text.trim().length < 10}>
+                  {busy ? "Scoring…" : "Submit for scoring"}
+                </button>
+              ) : (
+                <button className="btn btn--ghost" onClick={() => { setAnswer(null); setSeconds(0); }}>
+                  Answer again
+                </button>
+              )}
+              {index < questions.length - 1 ? (
+                <button className="btn btn--ghost" onClick={() => setIndex(index + 1)}>
+                  Next question
+                </button>
+              ) : (
+                <Link className="btn btn--ghost" to={`/session/${session?.id}/scorecard`}>
+                  Build scorecard
+                </Link>
+              )}
+            </div>
+            <ErrorBox error={error} />
+          </Row>
+
+          {answer ? <Feedback answer={answer} /> : null}
+        </>
+      ) : null}
+    </div>
+  );
+}

@@ -1,0 +1,30 @@
+SENIOR BACKEND ENGINEER (PYTHON)
+Meridian Labs - Athens or remote within EU
+
+ABOUT THE ROLE
+We are building the platform that powers logistics for mid-sized European
+retailers. You will join a team of six engineers and own services that move real
+money and real parcels.
+
+REQUIREMENTS
+Strong commercial experience with Python, ideally with FastAPI or a comparable
+async framework.
+Proven experience designing and operating PostgreSQL databases at scale,
+including query optimisation and schema migration.
+Production experience with Kubernetes for container orchestration and workload
+scheduling.
+Solid understanding of event-driven architecture and message brokers.
+Experience building and maintaining CI/CD pipelines.
+Hands-on experience running services on a major cloud provider, preferably AWS.
+Experience with observability: structured logging, metrics and distributed tracing.
+Demonstrated experience mentoring engineers and raising the standard of code
+review within a team.
+
+NICE TO HAVE
+Experience with Terraform or another infrastructure-as-code tool.
+Familiarity with GraphQL APIs.
+Exposure to the logistics or payments domain.
+
+WHAT WE OFFER
+Competitive salary, equity, and a genuine four-day-week pilot starting this year.
+Meridian Labs is an equal opportunity employer.

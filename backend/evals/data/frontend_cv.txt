@@ -1,0 +1,35 @@
+NIKOS PALAIOLOGOS
+Frontend Developer - Thessaloniki, Greece
+nikos.p@example.com
+
+SUMMARY
+Frontend developer with 2 years of experience building single-page applications.
+Comfortable owning a feature from Figma handoff through to release. Strongest on
+React and TypeScript; keen to grow into accessibility and design systems work.
+
+EXPERIENCE
+
+Frontend Developer, Kalliste Digital (2023 - 2025)
+Built the customer dashboard in React and TypeScript, replacing a jQuery page
+that had grown to 4000 lines.
+Introduced a component library with Storybook so the three product squads stopped
+rebuilding the same date picker.
+Cut the initial bundle from 1.4MB to 480KB by code-splitting routes and moving
+charting to a lazily loaded module.
+Added Playwright end-to-end tests covering the checkout journey, which caught two
+regressions before release in the first month.
+Worked with the designer to bring the dashboard to WCAG 2.1 AA, fixing focus
+order, contrast and screen-reader labels.
+
+Junior Developer, Aegean Web (2022 - 2023)
+Maintained WordPress and vanilla JavaScript sites for local businesses.
+Built a booking widget in plain JavaScript that is still in use.
+
+EDUCATION
+BSc Computer Science, Aristotle University of Thessaloniki, 2022
+
+TECHNICAL SKILLS
+Languages: TypeScript, JavaScript, HTML, CSS
+Frameworks: React, Next.js, Storybook, Playwright, Vitest
+Styling: Tailwind, CSS Modules, responsive design
+Practices: accessibility (WCAG 2.1), code review, Figma handoff, Git

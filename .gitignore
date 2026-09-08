@@ -1,0 +1,36 @@
+# --- Secrets -----------------------------------------------------------------
+# Never commit these. .env.example documents every variable instead.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# --- Python ------------------------------------------------------------------
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+
+# --- Node --------------------------------------------------------------------
+node_modules/
+dist/
+*.tsbuildinfo
+
+# --- Runtime data ------------------------------------------------------------
+# Uploaded CVs are personal data and must never enter version control.
+# Also covers the SQLite database and the Chroma vector store.
+backend/data/
+
+# --- Editor / OS -------------------------------------------------------------
+.DS_Store
+.idea/
+.vscode/
+.claude/
+
+# --- Course material ---------------------------------------------------------
+# The lecture decks and the assignment brief belong to the instructor. They are
+# kept locally for reference but are not redistributed through this repository.
+exercises/
+AI for Developers - Final Project.pdf

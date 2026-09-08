@@ -1,0 +1,27 @@
+services:
+  api:
+    build: ./backend
+    ports: ["8000:8000"]
+    environment:
+      # The stub provider needs no API key and no network.
+      LLM_PROVIDER: stub
+      EMBEDDING_PROVIDER: stub
+      SECRET_KEY: ${SECRET_KEY:-dev-only-change-me}
+      DATABASE_URL: sqlite:///./data/cvcoach.db
+      CORS_ORIGINS: '["http://localhost:5173"]'
+    volumes:
+      - api-data:/app/data
+
+  web:
+    image: node:22-alpine
+    working_dir: /app
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    ports: ["5173:5173"]
+    volumes:
+      - ./frontend:/app
+    environment:
+      VITE_API_PROXY: http://api:8000
+    depends_on: [api]
+
+volumes:
+  api-data:

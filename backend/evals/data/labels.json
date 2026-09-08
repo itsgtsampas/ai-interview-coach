@@ -1,0 +1,88 @@
+{
+  "_comment": [
+    "Ground truth for the eval harness. Authored by hand, from reading the fixture",
+    "documents. Requirements are keyed by a distinctive substring rather than by full",
+    "text, so the labels survive rewording by the extraction stage.",
+    "expected_status is a human judgement: strong = the CV shows concrete work on it,",
+    "partial = related but thin, missing = nothing supports it.",
+    "Retrieval probes identify the correct chunk by a distinctive phrase inside it."
+  ],
+  "pairs": [
+    {
+      "id": "backend-mixed",
+      "note": "Experienced backend CV against a backend role. Genuine mix of fit.",
+      "cv": "sample_cv.pdf",
+      "jd": "sample_jd.pdf",
+      "requirements": [
+        { "match": "python",        "expected_status": "strong" },
+        { "match": "postgresql",    "expected_status": "strong" },
+        { "match": "kubernetes",    "expected_status": "missing" },
+        { "match": "event-driven",  "expected_status": "strong" },
+        { "match": "ci/cd",         "expected_status": "strong" },
+        { "match": "cloud provider","expected_status": "strong" },
+        { "match": "observability", "expected_status": "partial",
+          "note": "CloudWatch dashboards and alerts, but no tracing or structured logging." },
+        { "match": "mentoring",     "expected_status": "strong" },
+        { "match": "terraform",     "expected_status": "missing" },
+        { "match": "graphql",       "expected_status": "missing" },
+        { "match": "logistics",     "expected_status": "partial",
+          "note": "Orders domain and a payments module, but not logistics." }
+      ],
+      "retrieval": [
+        { "query": "PostgreSQL schema design at scale", "relevant_contains": ["partitioning by month"] },
+        { "query": "message broker for asynchronous events", "relevant_contains": ["RabbitMQ"] },
+        { "query": "continuous integration and deployment pipeline", "relevant_contains": ["GitHub Actions"] },
+        { "query": "mentoring junior engineers", "relevant_contains": ["Mentored two junior"] },
+        { "query": "running services on AWS", "relevant_contains": ["EC2, S3 and RDS"] },
+        { "query": "reducing API latency", "relevant_contains": ["840ms to 210ms"] },
+        { "query": "automated test coverage", "relevant_contains": ["34 percent to 81 percent"] },
+        { "query": "monitoring and alerting dashboards", "relevant_contains": ["CloudWatch"] }
+      ]
+    },
+    {
+      "id": "backend-poor-fit",
+      "note": "Junior frontend CV against a senior backend role. Almost everything should be missing; this pair exists to catch invented evidence.",
+      "cv": "frontend_cv.pdf",
+      "jd": "sample_jd.pdf",
+      "requirements": [
+        { "match": "python",        "expected_status": "missing" },
+        { "match": "postgresql",    "expected_status": "missing" },
+        { "match": "kubernetes",    "expected_status": "missing" },
+        { "match": "event-driven",  "expected_status": "missing" },
+        { "match": "ci/cd",         "expected_status": "missing" },
+        { "match": "cloud provider","expected_status": "missing" },
+        { "match": "observability", "expected_status": "missing" },
+        { "match": "mentoring",     "expected_status": "missing" },
+        { "match": "terraform",     "expected_status": "missing" },
+        { "match": "graphql",       "expected_status": "missing" },
+        { "match": "logistics",     "expected_status": "missing" }
+      ],
+      "retrieval": []
+    },
+    {
+      "id": "frontend-good-fit",
+      "note": "Frontend CV against a frontend role. Most requirements should be evidenced.",
+      "cv": "frontend_cv.pdf",
+      "jd": "frontend_jd.pdf",
+      "requirements": [
+        { "match": "react",           "expected_status": "strong" },
+        { "match": "component library","expected_status": "strong" },
+        { "match": "performance",     "expected_status": "strong" },
+        { "match": "accessibility",   "expected_status": "strong" },
+        { "match": "end-to-end",      "expected_status": "strong" },
+        { "match": "designers",       "expected_status": "strong" },
+        { "match": "server-side",     "expected_status": "partial",
+          "note": "Next.js is listed under skills but no SSR work is described." },
+        { "match": "webgl",           "expected_status": "missing" },
+        { "match": "mentoring",       "expected_status": "missing" }
+      ],
+      "retrieval": [
+        { "query": "React and TypeScript application", "relevant_contains": ["customer dashboard in React"] },
+        { "query": "shared component library", "relevant_contains": ["Storybook"] },
+        { "query": "bundle size and load performance", "relevant_contains": ["480KB"] },
+        { "query": "web accessibility standards", "relevant_contains": ["WCAG 2.1 AA"] },
+        { "query": "end to end testing of user journeys", "relevant_contains": ["Playwright"] }
+      ]
+    }
+  ]
+}
