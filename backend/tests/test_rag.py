@@ -73,3 +73,38 @@ def test_best_sentence_is_returned_verbatim():
 def test_coverage_is_bounded_and_ordered():
     assert coverage("python fastapi", "I use Python and FastAPI daily") == 1.0
     assert coverage("kubernetes terraform", "I use Python and FastAPI daily") == 0.0
+
+
+def test_concurrent_indexing_does_not_race(tmp_path):
+    """Two documents are indexed in separate background tasks, so their writes
+    to the vector store overlap.
+
+    Chroma's PersistentClient mutates an internal subscription set while
+    iterating it, which raises "Set changed size during iteration" when two
+    writes land at once. TestClient runs background tasks sequentially, so this
+    only ever appeared against a real ASGI server — hence an explicit test.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    from app.rag import store
+    from app.rag.chunker import chunk_document
+    from app.rag.loader import LoadedDocument, LoadedPage
+
+    def index(n: int) -> int:
+        doc = LoadedDocument(pages=[LoadedPage(number=1, text=(
+            f"EXPERIENCE\nEngineer {n} built services in Python and FastAPI.\n"
+            f"SKILLS\nPython, PostgreSQL, Docker, AWS, pytest, RabbitMQ\n"
+        ))])
+        chunked = chunk_document(doc, doc_key=f"race{n}", doc_label="CV")
+        return store.index_document(
+            chunked, user_id=9000 + n, session_id=9000 + n,
+            document_id=n, doc_kind="cv",
+        )
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        counts = list(pool.map(index, range(8)))
+
+    assert all(c > 0 for c in counts), "every concurrent write must succeed"
+    # And each writer's chunks must be retrievable under its own filter.
+    for n in range(8):
+        assert store.all_chunks(user_id=9000 + n, session_id=9000 + n, doc_kind="cv")

@@ -18,9 +18,8 @@ from app.models import (
     SessionStatus,
 )
 from app.prompts import analyse_match, extract_requirements
-from app.rag.loader import load_pdf
 from app.rag.retriever import RetrievalConfig, retrieve
-from app.services.ingestion import documents_ready
+from app.services.ingestion import documents_ready, load_document
 
 logger = logging.getLogger("cvcoach.analysis")
 
@@ -33,7 +32,7 @@ def _jd_text(session_id: int, db: Session) -> str:
     ).first()
     if doc is None:
         raise DocumentNotReady("No job description has been uploaded for this session.")
-    return load_pdf(Path(doc.storage_path)).full_text
+    return load_document(doc).full_text
 
 
 def verify_citation(quote: str | None, passages: list[dict]) -> bool:

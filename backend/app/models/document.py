@@ -11,6 +11,14 @@ class DocumentKind(str, Enum):
     jd = "jd"
 
 
+class DocumentSource(str, Enum):
+    """How the text arrived. A job description is usually read on a web page,
+    so requiring a PDF for it is friction the user did not ask for."""
+
+    pdf = "pdf"
+    text = "text"
+
+
 class IngestStatus(str, Enum):
     pending = "pending"
     processing = "processing"
@@ -24,6 +32,7 @@ class Document(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     session_id: int = Field(foreign_key="interview_session.id", index=True)
     kind: DocumentKind
+    source: DocumentSource = Field(default=DocumentSource.pdf)
     original_filename: str = Field(max_length=255)
     sha256: str = Field(max_length=64, index=True)
     size_bytes: int

@@ -1,4 +1,8 @@
-"""Stage 1 of indexing: PDF -> per-page text, with a scan guard."""
+"""Stage 1 of indexing: a source document -> per-page text.
+
+Two sources produce the same LoadedDocument, so everything downstream —
+chunking, embedding, retrieval — is identical for both.
+"""
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -6,7 +10,7 @@ from pathlib import Path
 from pypdf import PdfReader
 
 from app.config import get_settings
-from app.exceptions import UnparseablePDF
+from app.exceptions import InvalidUpload, UnparseablePDF
 
 
 @dataclass
@@ -57,3 +61,25 @@ def load_pdf(path: Path) -> LoadedDocument:
             {"extracted_chars": doc.char_count, "pages": len(pages)},
         )
     return doc
+
+
+# A job description shorter than this is almost certainly a partial paste — a
+# heading without the body, or a stray line. Better to say so than to build an
+# analysis on it.
+MIN_TEXT_CHARS = 200
+
+
+def load_text(path: Path) -> LoadedDocument:
+    """Pasted text needs no extraction, so there is nothing to fail at.
+
+    It arrives cleaner than PDF output: no hard line wrapping to undo and no
+    possibility of being a scan.
+    """
+    raw = path.read_text(encoding="utf-8", errors="replace").strip()
+    if len(raw) < MIN_TEXT_CHARS:
+        raise InvalidUpload(
+            f"That is only {len(raw)} characters. Paste the full job description — "
+            "requirements, responsibilities and all.",
+            {"chars": len(raw), "minimum": MIN_TEXT_CHARS},
+        )
+    return LoadedDocument(pages=[LoadedPage(number=1, text=raw)])

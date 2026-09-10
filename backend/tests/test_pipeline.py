@@ -171,3 +171,69 @@ def test_deleting_a_session_purges_its_vectors(auth_client, ready_session):
     assert auth_client.delete(f"/api/v1/sessions/{sid}").status_code == 204
     assert not store.all_chunks(user_id=user_id, session_id=sid, doc_kind="cv")
     assert auth_client.get(f"/api/v1/sessions/{sid}").status_code == 404
+
+
+# --- pasted job descriptions ----------------------------------------------
+
+JD_TEXT = (
+    "SENIOR BACKEND ENGINEER\n\nREQUIREMENTS\n"
+    "Strong commercial experience with Python, ideally with FastAPI.\n"
+    "Proven experience designing and operating PostgreSQL databases at scale.\n"
+    "Production experience with Kubernetes for container orchestration.\n"
+    "Experience building and maintaining CI/CD pipelines.\n"
+    "Demonstrated experience mentoring engineers and raising code review standards.\n"
+    "\nNICE TO HAVE\nFamiliarity with GraphQL APIs.\n"
+)
+
+
+def test_job_description_can_be_pasted_instead_of_uploaded(auth_client, cv_bytes):
+    """The whole pipeline must work when the JD never was a PDF."""
+    sid = auth_client.post("/api/v1/sessions", json={"title": "Pasted JD"}).json()["id"]
+    auth_client.post(f"/api/v1/sessions/{sid}/documents?kind=cv",
+                     files={"file": ("cv.pdf", cv_bytes, "application/pdf")})
+
+    r = auth_client.post(f"/api/v1/sessions/{sid}/documents/text?kind=jd",
+                         json={"text": JD_TEXT, "title": "Meridian Labs"})
+    assert r.status_code == 202, r.text
+    assert r.json()["source"] == "text"
+
+    docs = auth_client.get(f"/api/v1/sessions/{sid}/documents").json()
+    assert {d["ingest_status"] for d in docs} == {"ready"}
+    pasted = next(d for d in docs if d["kind"] == "jd")
+    assert pasted["chunk_count"] > 0
+    assert pasted["original_filename"] == "Meridian Labs"
+
+    # The analysis must be as good as it is from a PDF: requirements extracted,
+    # verdicts assigned, citations verbatim.
+    report = auth_client.post(f"/api/v1/sessions/{sid}/analysis").json()
+    assert len(report["items"]) >= 5
+    statuses = {i["status"] for i in report["items"]}
+    assert "strong" in statuses and "missing" in statuses
+
+    k8s = next(i for i in report["items"] if "kubernetes" in i["requirement"].lower())
+    assert k8s["status"] == "missing"
+    py = next(i for i in report["items"] if "python" in i["requirement"].lower())
+    assert py["status"] == "strong" and py["evidence_quote"]
+
+
+def test_a_too_short_paste_is_reported_not_analysed(auth_client):
+    sid = auth_client.post("/api/v1/sessions", json={"title": "Short"}).json()["id"]
+    auth_client.post(f"/api/v1/sessions/{sid}/documents/text?kind=jd",
+                     json={"text": "Backend engineer wanted."})
+    doc = auth_client.get(f"/api/v1/sessions/{sid}/documents").json()[0]
+    assert doc["ingest_status"] == "failed"
+    assert "characters" in (doc["ingest_error"] or "")
+
+
+def test_pasting_replaces_a_previously_uploaded_job_description(auth_client, jd_bytes):
+    """Otherwise the old JD's vectors would linger and pollute retrieval."""
+    sid = auth_client.post("/api/v1/sessions", json={"title": "Replace"}).json()["id"]
+    auth_client.post(f"/api/v1/sessions/{sid}/documents?kind=jd",
+                     files={"file": ("jd.pdf", jd_bytes, "application/pdf")})
+    auth_client.post(f"/api/v1/sessions/{sid}/documents/text?kind=jd",
+                     json={"text": JD_TEXT})
+
+    docs = [d for d in auth_client.get(f"/api/v1/sessions/{sid}/documents").json()
+            if d["kind"] == "jd"]
+    assert len(docs) == 1
+    assert docs[0]["source"] == "text"

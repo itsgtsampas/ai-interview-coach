@@ -7,6 +7,7 @@ document cannot leak into another user's LLM context.
 """
 
 import os
+import threading
 
 # Must be set before chromadb is imported.
 os.environ.setdefault("ANONYMIZED_TELEMETRY", "False")
@@ -19,7 +20,6 @@ import logging
 logging.getLogger("chromadb.telemetry.product.posthog").setLevel(logging.CRITICAL)
 
 from dataclasses import dataclass
-from functools import lru_cache
 from typing import Any
 
 import chromadb
@@ -30,6 +30,15 @@ from app.rag.chunker import ChunkedDocument
 from app.rag.embedder import get_embedder
 
 COLLECTION = "documents"
+
+# Chroma's PersistentClient is not safe for concurrent writes: its internal
+# subscription set is mutated while being iterated, which raises
+# "Set changed size during iteration" when two writes overlap. Our two
+# documents are indexed in separate background tasks, so they do overlap.
+# Serialising writes here costs nothing at this scale and removes the race.
+# Note this never reproduced under TestClient, which runs background tasks
+# sequentially — it needs a real ASGI server to surface.
+_WRITE_LOCK = threading.Lock()
 
 
 @dataclass
@@ -61,14 +70,31 @@ class _EmbeddingFunctionAdapter:
         return self._embedder.name
 
 
-@lru_cache
+_CLIENT: chromadb.ClientAPI | None = None
+_CLIENT_LOCK = threading.Lock()
+
+
 def get_client() -> chromadb.ClientAPI:
-    settings = get_settings()
-    settings.ensure_dirs()
-    return chromadb.PersistentClient(
-        path=str(settings.chroma_dir),
-        settings=ChromaSettings(anonymized_telemetry=False, allow_reset=True),
-    )
+    """Build the Chroma client once, under a lock.
+
+    functools.lru_cache does not serialise the call it memoises: concurrent
+    first callers each construct a client, and Chroma's tenant setup races with
+    itself ("Could not connect to tenant default_tenant"). Double-checked
+    locking keeps the fast path lock-free after the first call.
+    """
+    global _CLIENT
+    if _CLIENT is None:
+        with _CLIENT_LOCK:
+            if _CLIENT is None:
+                settings = get_settings()
+                settings.ensure_dirs()
+                _CLIENT = chromadb.PersistentClient(
+                    path=str(settings.chroma_dir),
+                    settings=ChromaSettings(
+                        anonymized_telemetry=False, allow_reset=True
+                    ),
+                )
+    return _CLIENT
 
 
 def get_collection():
@@ -106,7 +132,8 @@ def index_document(
         })
 
     if ids:
-        collection.upsert(ids=ids, documents=docs, metadatas=metas)
+        with _WRITE_LOCK:
+            collection.upsert(ids=ids, documents=docs, metadatas=metas)
     return len(ids)
 
 
@@ -189,9 +216,10 @@ def parent_text(parent_id: str, *, user_id: int, session_id: int) -> str | None:
 def delete_session(*, user_id: int, session_id: int) -> None:
     """Purge every vector for a session. Called when the user deletes it."""
     try:
-        get_collection().delete(where={"$and": [
-            {"user_id": {"$eq": user_id}},
-            {"session_id": {"$eq": session_id}},
-        ]})
+        with _WRITE_LOCK:
+            get_collection().delete(where={"$and": [
+                {"user_id": {"$eq": user_id}},
+                {"session_id": {"$eq": session_id}},
+            ]})
     except Exception:
         pass

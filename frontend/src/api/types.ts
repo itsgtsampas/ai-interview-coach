@@ -2,6 +2,7 @@
  *  /openapi.json, so these can be regenerated with openapi-typescript. */
 
 export type DocumentKind = "cv" | "jd";
+export type DocumentSource = "pdf" | "text";
 export type IngestStatus = "pending" | "processing" | "ready" | "failed";
 export type EvidenceStatus = "strong" | "partial" | "missing";
 export type RequirementCategory = "must_have" | "nice_to_have";
@@ -19,6 +20,7 @@ export interface User {
 export interface DocumentOut {
   id: number;
   kind: DocumentKind;
+  source: DocumentSource;
   original_filename: string;
   ingest_status: IngestStatus;
   ingest_error: string | null;

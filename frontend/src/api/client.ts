@@ -91,6 +91,11 @@ export const api = {
       body: fd,
     });
   },
+  pasteDocument: (id: number, kind: DocumentKind, text: string, title: string) =>
+    request<DocumentOut>(`/sessions/${id}/documents/text?kind=${kind}`, {
+      method: "POST",
+      body: JSON.stringify({ text, title }),
+    }),
   listDocuments: (id: number) => request<DocumentOut[]>(`/sessions/${id}/documents`),
 
   runAnalysis: (id: number) =>

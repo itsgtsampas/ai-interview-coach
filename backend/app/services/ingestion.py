@@ -9,10 +9,17 @@ from sqlmodel import Session, select
 
 from app.config import get_settings
 from app.exceptions import InvalidUpload, UnparseablePDF
-from app.models import Document, DocumentKind, IngestStatus, InterviewSession, SessionStatus
+from app.models import (
+    Document,
+    DocumentKind,
+    DocumentSource,
+    IngestStatus,
+    InterviewSession,
+    SessionStatus,
+)
 from app.rag import store
 from app.rag.chunker import chunk_document
-from app.rag.loader import load_pdf
+from app.rag.loader import LoadedDocument, load_pdf, load_text
 
 logger = logging.getLogger("cvcoach.ingestion")
 
@@ -39,17 +46,12 @@ def save_upload(
     path = user_dir / f"{uuid.uuid4().hex}.pdf"
     path.write_bytes(content)
 
-    existing = db.exec(
-        select(Document).where(Document.session_id == session_id, Document.kind == kind)
-    ).first()
-    if existing:  # Re-uploading replaces the previous document of this kind.
-        store.delete_session(user_id=user_id, session_id=session_id)
-        db.delete(existing)
-        db.commit()
+    _replace_existing(session_id=session_id, user_id=user_id, kind=kind, db=db)
 
     doc = Document(
         session_id=session_id,
         kind=kind,
+        source=DocumentSource.pdf,
         original_filename=Path(filename).name[:255],
         sha256=hashlib.sha256(content).hexdigest(),
         size_bytes=len(content),
@@ -60,6 +62,75 @@ def save_upload(
     db.commit()
     db.refresh(doc)
     return doc
+
+
+def _replace_existing(
+    *, session_id: int, user_id: int, kind: DocumentKind, db: Session
+) -> None:
+    """Re-supplying a document of the same kind replaces the previous one.
+
+    The vectors go too — otherwise the old CV would still be retrievable and the
+    analysis would quietly mix two documents.
+    """
+    existing = db.exec(
+        select(Document).where(Document.session_id == session_id, Document.kind == kind)
+    ).first()
+    if existing:
+        store.delete_session(user_id=user_id, session_id=session_id)
+        db.delete(existing)
+        db.commit()
+
+
+def save_text(
+    *, text: str, title: str, session_id: int, user_id: int, kind: DocumentKind, db: Session
+) -> Document:
+    """Accept a document as pasted text rather than a file.
+
+    Job descriptions live on web pages, so demanding a PDF forces the user
+    through print-to-PDF for no benefit. The stored text feeds exactly the same
+    pipeline as an extracted PDF.
+    """
+    settings = get_settings()
+    cleaned = text.strip()
+
+    if len(cleaned.encode("utf-8")) > settings.max_upload_bytes:
+        raise InvalidUpload(
+            f"That text is {len(cleaned) // 1024}KB; the limit is "
+            f"{settings.max_upload_bytes // 1024}KB."
+        )
+
+    user_dir = settings.storage_dir / str(user_id)
+    user_dir.mkdir(parents=True, exist_ok=True)
+    path = user_dir / f"{uuid.uuid4().hex}.txt"
+    path.write_text(cleaned, encoding="utf-8")
+
+    _replace_existing(session_id=session_id, user_id=user_id, kind=kind, db=db)
+
+    doc = Document(
+        session_id=session_id,
+        kind=kind,
+        source=DocumentSource.text,
+        original_filename=(title.strip() or "Pasted text")[:255],
+        sha256=hashlib.sha256(cleaned.encode("utf-8")).hexdigest(),
+        size_bytes=len(cleaned.encode("utf-8")),
+        storage_path=str(path),
+        ingest_status=IngestStatus.pending,
+    )
+    db.add(doc)
+    db.commit()
+    db.refresh(doc)
+    return doc
+
+
+def load_document(doc: Document) -> "LoadedDocument":
+    """Read a stored document, whichever way it arrived.
+
+    Every caller goes through here. The analysis service previously called
+    load_pdf directly, which meant a pasted job description was parsed as a PDF
+    and failed silently.
+    """
+    load = load_text if doc.source == DocumentSource.text else load_pdf
+    return load(Path(doc.storage_path))
 
 
 def ingest_document(
@@ -74,7 +145,7 @@ def ingest_document(
     db.commit()
 
     try:
-        loaded = load_pdf(Path(doc.storage_path))
+        loaded = load_document(doc)
         label = "CV" if doc.kind == DocumentKind.cv else "Job description"
         chunked = chunk_document(
             loaded,
@@ -94,7 +165,7 @@ def ingest_document(
         doc.chunk_count = count
         doc.ingest_status = IngestStatus.ready
         doc.ingest_error = None
-    except UnparseablePDF as exc:
+    except (UnparseablePDF, InvalidUpload) as exc:
         doc.ingest_status = IngestStatus.failed
         doc.ingest_error = exc.message
     except Exception as exc:  # noqa: BLE001 - a background task must never die silently
