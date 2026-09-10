@@ -2,8 +2,9 @@
 
 **Author:** Τσαμπάς Γεώργιος
 **Course:** AI for Developers — AUEB, Κέντρο Επιμόρφωσης και Διά Βίου Μάθησης (Παναγιώτης Μόσχος)
-**Status:** Design — no code written yet
-**Version:** 1.0
+**Status:** Implemented. See [IMPLEMENTATION.md](IMPLEMENTATION.md) for what was
+built against this design, and [evaluation.md](evaluation.md) for measured results.
+**Version:** 1.1
 
 ---
 
@@ -12,7 +13,8 @@
 Section 1 states what we are building and the two corrections I am making to the accepted
 proposal. Section 2 maps every seminar module onto a concrete part of the system — this is
 the section that earns the certificate. Sections 3–10 are the actual engineering design.
-Section 11 is the build order. Section 12 is risk.
+Section 11 is the build order, section 12 risk, and section 14 what was
+deliberately left out and why.
 
 ---
 
@@ -736,7 +738,91 @@ than to dropping a capability.
 
 ---
 
-## 14. Why this earns the grade
+## 14. Future extensions
+
+Everything here was considered and deliberately not built. The reasoning matters more
+than the list: each entry says what would be gained and what stopped it.
+
+### 14.1 Reading a job description from its URL
+
+The user pastes a link; the server fetches the page and extracts the posting. It is the
+obvious next step after pasting, and it is **not** simply a matter of adding an HTTP call.
+Four things stand in the way:
+
+**Job boards block server-side fetches.** LinkedIn, Indeed and Workday return a login wall
+or a bot check rather than the posting. It would work on a company's own careers page and
+fail on exactly the sites where most people find jobs — a feature that works half the time
+is worse than one the user knows to bypass.
+
+**Terms of service.** LinkedIn prohibits scraping outright. Building it into a submitted
+academic project would mean shipping a deliberate ToS violation.
+
+**Server-Side Request Forgery — the serious one.** Fetching an arbitrary user-supplied URL
+from the server is a textbook SSRF vector: `http://169.254.169.254/` reaches the cloud
+metadata endpoint, `http://localhost:8000/` reaches our own API, and private ranges reach
+anything else on the network. The response would then be handed straight back to the user.
+Doing this safely needs a private-IP blocklist applied *after* DNS resolution (to stop
+rebinding), a redirect cap that re-checks each hop, a response-size limit and a timeout.
+That is a security feature in its own right, not a convenience.
+
+**Boilerplate extraction.** Raw HTML carries navigation, footers, cookie banners and
+"related jobs". Without readability-style extraction those become chunks and pollute
+retrieval. It needs a further dependency (`trafilatura` or `readability-lxml`).
+
+Pasting sidesteps all four: the browser has already rendered and authenticated the page,
+and the user selects exactly the relevant text. **Estimated cost: about a day, for a
+feature that is less reliable than the thing it replaces.**
+
+### 14.2 OCR for scanned CVs
+
+`rag/loader.py` rejects a PDF yielding fewer than 150 characters per page, on the grounds
+that a scan silently produces a garbage analysis. A meaningful minority of real CVs are
+scans or exports from design tools. Tesseract or a hosted OCR service would recover them.
+Deliberately out of scope: it changes the failure from *honest and explained* to *slow,
+approximate and hard to debug*, and the current error tells the user exactly what to do.
+
+### 14.3 Database migrations with Alembic
+
+Schema changes currently rely on `SQLModel.metadata.create_all()`, which creates missing
+tables but **not** missing columns. Adding `document.source` therefore required deleting
+and reseeding the development database. Deck 08 flags this explicitly ("in production use
+Alembic for migrations instead of `create_all`"). Fine for a single-developer project with
+disposable data; the first real deployment would need Alembic before the first schema change.
+
+### 14.4 What a semantic embedding model would unlock
+
+The default provider is lexical: it matches vocabulary, not meaning. Measured consequences
+in [evaluation.md](evaluation.md): status accuracy 0.839 with a false-evidence rate of
+0.125, driven by cases such as "code review" satisfying a requirement about *mentoring*.
+Switching `EMBEDDING_PROVIDER` and `LLM_PROVIDER` to `openai` is a configuration change
+with no code movement, and would also unlock three measurements the harness implements but
+cannot currently exercise: few-shot versus zero-shot prompt ablations, self-consistency
+across repeated scorings, and LLM-as-judge.
+
+### 14.5 Re-testing multi-query expansion, or removing it
+
+The ablation table records a **negative result**: multi-query expansion changes no metric.
+The likely cause is that the lexical embedder retrieves the same chunks for a paraphrase.
+It should be re-measured against semantic embeddings and, if it still shows nothing,
+removed — it costs an LLM call per requirement in the `openai` configuration.
+
+### 14.6 Streaming evaluations, and exporting the scorecard
+
+Section 7 specifies an SSE endpoint so evaluation feedback appears as it is written rather
+than after a pause, and a PDF export of the scorecard. Both are straightforward; neither
+changes what the system can determine about a candidate, which is why they were cut first.
+
+### 14.7 Longer context instead of chunking
+
+A model with a 1M-token context could take an entire CV and job description without
+chunking at all, removing the retrieval layer from the critical path. That would trade a
+tested, inspectable pipeline for one long prompt — and lose the per-requirement citations
+that the whole design is built around. Worth measuring rather than assuming; the harness
+already exists to do it.
+
+---
+
+## 15. Why this earns the grade
 
 Against the eight stated criteria on slide 18:
 
