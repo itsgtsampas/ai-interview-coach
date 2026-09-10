@@ -18,10 +18,11 @@ from app.llm.base import AgentStep, LLMResponse, RenderedPrompt, ToolSpec
 from app.llm.tokens import estimate_tokens
 from app.textutil import (
     best_evidence,
-    reflow,
     build_idf,
     coverage,
     keywords,
+    reflow,
+    salient_terms,
     tokens,
     weighted_coverage,
 )
@@ -66,17 +67,28 @@ _INCLUDE_HEAD = re.compile(
     r"^\s*(requirements?|qualifications?|what\s+you.{0,3}ll\s+need|what\s+we.{0,3}re\s+looking\s+for|"
     r"must[\s-]?haves?|nice[\s-]?to[\s-]?haves?|responsibilities|about\s+you|your\s+profile|"
     r"skills?|preferred|bonus|desirable|essential|the\s+ideal\s+candidate)"
-    r"\s*:?\s*$",
+    r"\b.{0,24}$",
     re.I,
 )
 _EXCLUDE_HEAD = re.compile(
     r"^\s*(about\s+(the\s+)?(role|us|the\s+company|team)|what\s+we\s+offer|benefits?|perks?|"
     r"how\s+to\s+apply|our\s+mission|why\s+join|compensation|salary|equal\s+opportunity|"
-    r"the\s+role|overview|company)"
-    r"\s*:?\s*$",
+    r"the\s+role|overview|company|compensation|salary|pay|package|"
+    r"important\s+notice|by\s+submitting|refer\s+a\s+friend)"
+    r"\b.{0,24}$",
     re.I,
 )
 _SOFT_BUCKET = re.compile(r"nice|bonus|preferred|desirable", re.I)
+
+# Used only by the headingless fallback, to tell a requirement from company
+# marketing. A requirement either names a technology (which shows up as a
+# capitalised term) or uses the vocabulary of asking for something.
+_REQUIREMENT_SIGNAL = re.compile(
+    r"\b(years?|experience|degree|proficien\w*|knowledge|abilit\w*|familiar\w*|"
+    r"fluen\w*|skills?|understanding|expertise|background\s+in|comfortable|"
+    r"track\s+record|required|must\s+have|competen\w*|qualified|hands[\s-]on)\b",
+    re.I,
+)
 
 _BULLET = re.compile(r"^\s*[-•*·–—]\s+|^\s*\d+[.)]\s+")
 
@@ -198,12 +210,12 @@ class StubLLMProvider:
             line = raw.strip()
             if not line:
                 continue
-            if _EXCLUDE_HEAD.match(line):
-                in_requirements = False
-                continue
             if _INCLUDE_HEAD.match(line):
                 in_requirements = True
                 bucket = "nice_to_have" if _SOFT_BUCKET.search(line) else "must_have"
+                continue
+            if _EXCLUDE_HEAD.match(line):
+                in_requirements = False
                 continue
             if not in_requirements:
                 continue
@@ -226,14 +238,37 @@ class StubLLMProvider:
                 item_bucket = bucket
             found.append((cleaned, item_bucket))
 
-        # Fallback for job descriptions with no recognisable section headings:
-        # take bullet lines from the whole document.
+        # Fallback for postings with no recognisable section heading: take every
+        # substantive line outside the sections we know to be boilerplate.
+        # Returning a generic placeholder instead — the previous behaviour —
+        # produced a flawless score against a requirement nobody had stated.
         if not found:
+            skipping = False
             for raw in jd_text.splitlines():
-                if _BULLET.match(raw):
-                    cleaned = _BULLET.sub("", raw).strip(" .;")
-                    if 12 <= len(cleaned) <= 260:
-                        found.append((cleaned, "must_have"))
+                line = raw.strip()
+                if not line:
+                    continue
+                if _INCLUDE_HEAD.match(line):
+                    skipping = False
+                    continue
+                if _EXCLUDE_HEAD.match(line):
+                    skipping = True
+                    continue
+                if skipping:
+                    continue
+                cleaned = _BULLET.sub("", raw).strip(" .;")
+                letters = [ch for ch in cleaned if ch.isalpha()]
+                if not (20 <= len(cleaned) <= 260) or not letters:
+                    continue
+                if all(ch.isupper() for ch in letters):
+                    continue
+                # Without this the fallback swallows the company blurb, and a
+                # CV then scores perfectly against "we are growing fast".
+                looks_like_requirement = (
+                    bool(salient_terms(cleaned)) or bool(_REQUIREMENT_SIGNAL.search(cleaned))
+                )
+                if looks_like_requirement and len(keywords(cleaned)) >= 3:
+                    found.append((cleaned, "must_have"))
 
         seen: set[str] = set()
         out: list[dict] = []
@@ -246,9 +281,8 @@ class StubLLMProvider:
             if len(out) >= 12:
                 break
 
-        if not out:
-            out = [{"text": "Relevant professional experience for this role",
-                    "category": "must_have"}]
+        # No placeholder. An empty list is an honest answer that the caller can
+        # act on; a fabricated requirement is not.
         return {"requirements": out}
 
     def _analyse_match(self, payload: dict[str, Any]) -> dict:

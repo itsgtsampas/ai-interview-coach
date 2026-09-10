@@ -6,6 +6,14 @@ import re
 _WORD = re.compile(r"[A-Za-z][A-Za-z0-9+#.\-]*(?:/[A-Za-z0-9+#.\-]+)+|[A-Za-z][A-Za-z0-9+#.\-]{1,}")
 _SENT_SPLIT = re.compile(r"(?<=[.!?;])\s+")
 _ENDS_SENTENCE = re.compile(r"[.!?:;]$")
+# A line ending on any of these cannot be the end of a thought, so the next line
+# is a continuation even if it starts with a capital ("...experience with" /
+# "Python and FastAPI").
+_DANGLING_END = re.compile(
+    r"(?:[,;:\-\u2013\u2014]|\b(?:and|or|with|of|the|a|an|in|to|for|on|at|by|from"
+    r"|that|which|including|using|such as))\s*$",
+    re.I,
+)
 
 STOPWORDS = {
     "a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "has", "have",
@@ -71,12 +79,32 @@ def _is_heading_line(line: str) -> bool:
     return bool(letters) and all(c.isupper() for c in letters) and len(line.split()) <= 6
 
 
-def reflow(text: str) -> str:
-    """Undo the hard line wrapping that PDF extraction produces.
+def _is_continuation(buffer: str, nxt: str) -> bool:
+    """Is `nxt` the rest of a wrapped line, or a new item in its own right?
 
-    A line that does not end in sentence punctuation is a continuation of the
-    next one. Without this, sentence splitting cuts citations mid-clause and the
-    quote shown in the UI reads as truncated.
+    Getting this wrong in either direction is costly. Merging everything — the
+    original rule, "join unless the line ends in punctuation" — destroys bullet
+    lists, and real job postings are bullet lists whose items carry no full
+    stop. Merging nothing leaves PDF-wrapped sentences broken mid-clause.
+
+    A wrapped line almost always resumes mid-sentence, so it starts lowercase;
+    a new bullet starts with a capital or a digit. The dangling-word check
+    catches the remaining case, where a wrap lands just before a proper noun.
+    """
+    if not buffer:
+        return False
+    if nxt[:1].islower():
+        return True
+    return bool(_DANGLING_END.search(buffer))
+
+
+def reflow(text: str) -> str:
+    """Undo the hard line wrapping that PDF extraction produces, without
+    flattening lists.
+
+    Sentence splitting depends on this: without it a citation is cut mid-clause
+    and reads as truncated in the UI. With too much of it, every requirement in
+    a job posting merges into one paragraph and the section headings disappear.
     """
     out: list[str] = []
     buffer = ""
@@ -95,7 +123,12 @@ def reflow(text: str) -> str:
                 buffer = ""
             out.append(line)
             continue
-        buffer = f"{buffer} {line}".strip() if buffer else line
+        if _is_continuation(buffer, line):
+            buffer = f"{buffer} {line}"
+        else:
+            if buffer:
+                out.append(buffer)
+            buffer = line
         if _ENDS_SENTENCE.search(line):
             out.append(buffer)
             buffer = ""

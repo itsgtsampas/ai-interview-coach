@@ -237,3 +237,55 @@ def test_pasting_replaces_a_previously_uploaded_job_description(auth_client, jd_
             if d["kind"] == "jd"]
     assert len(docs) == 1
     assert docs[0]["source"] == "text"
+
+
+def _bulleted_jd() -> str:
+    from pathlib import Path
+    return (Path(__file__).resolve().parent.parent
+            / "evals" / "data" / "bulleted_jd.txt").read_text()
+
+
+def test_a_real_bulleted_posting_yields_real_requirements(auth_client, cv_bytes):
+    """Regression: a posting whose bullets carry no full stop.
+
+    This shape previously extracted nothing, fell back to a placeholder
+    requirement, and scored every CV 100/100 against it.
+    """
+    sid = auth_client.post("/api/v1/sessions", json={"title": "Bulleted"}).json()["id"]
+    auth_client.post(f"/api/v1/sessions/{sid}/documents?kind=cv",
+                     files={"file": ("cv.pdf", cv_bytes, "application/pdf")})
+    auth_client.post(f"/api/v1/sessions/{sid}/documents/text?kind=jd",
+                     json={"text": _bulleted_jd()})
+
+    report = auth_client.post(f"/api/v1/sessions/{sid}/analysis").json()
+    requirements = [i["requirement"] for i in report["items"]]
+
+    assert len(requirements) >= 8, requirements
+    assert any("java" in r.lower() for r in requirements)
+    assert any("kotlin" in r.lower() for r in requirements)
+
+    # Company blurb, salary and legal boilerplate are not requirements.
+    joined = " ".join(requirements).lower()
+    for boilerplate in ("compensation", "pln", "job scams", "superapp", "deserve more"):
+        assert boilerplate not in joined, f"{boilerplate!r} leaked into the requirements"
+
+    # A Python CV against a Java role must not score as a strong match.
+    assert report["overall_score"] < 70, report["overall_score"]
+    assert report["counts"]["missing"] > 0
+
+
+def test_a_posting_with_no_requirements_is_refused_not_scored(auth_client, cv_bytes):
+    """Scoring against nothing yields a meaningless perfect match."""
+    sid = auth_client.post("/api/v1/sessions", json={"title": "Blurb only"}).json()["id"]
+    auth_client.post(f"/api/v1/sessions/{sid}/documents?kind=cv",
+                     files={"file": ("cv.pdf", cv_bytes, "application/pdf")})
+    auth_client.post(f"/api/v1/sessions/{sid}/documents/text?kind=jd", json={"text": (
+        "About the job\nAbout Northwind\n"
+        "People deserve more from their money, and we are building the financial "
+        "superapp to give it to them. We are growing fast and we would love to "
+        "hear from you. Our culture is built on trust, ownership and speed.\n"
+        "Important notice for candidates\nJob scams are on the rise.\n")})
+
+    r = auth_client.post(f"/api/v1/sessions/{sid}/analysis")
+    assert r.status_code == 422
+    assert r.json()["error"] == "no_requirements_found"

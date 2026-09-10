@@ -17,7 +17,9 @@ class RequirementOut(BaseModel):
 
 
 class RequirementsOut(BaseModel):
-    requirements: list[RequirementOut] = Field(min_length=1, max_length=20)
+    # May legitimately be empty: a page with no requirements section yields
+    # nothing, and that must be representable rather than fabricated.
+    requirements: list[RequirementOut] = Field(max_length=20)
 
 
 # --- Stage 2: match analysis ----------------------------------------------

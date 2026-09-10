@@ -108,3 +108,41 @@ def test_concurrent_indexing_does_not_race(tmp_path):
     # And each writer's chunks must be retrievable under its own filter.
     for n in range(8):
         assert store.all_chunks(user_id=9000 + n, session_id=9000 + n, doc_kind="cv")
+
+
+# --- real-world document shapes -------------------------------------------
+
+def test_reflow_keeps_bullets_apart_but_joins_wrapped_sentences():
+    """The two jobs pull in opposite directions and both must hold.
+
+    Job postings are bullet lists whose items carry no full stop; PDF text is
+    prose broken mid-clause. An earlier rule joined any line not ending in
+    punctuation, which merged a whole requirements section into one paragraph
+    and made its heading unfindable.
+    """
+    from app.textutil import reflow
+
+    bullets = reflow("What you'll need\nFluency with Java\n4+ years of experience")
+    assert bullets.splitlines() == [
+        "What you'll need", "Fluency with Java", "4+ years of experience",
+    ]
+
+    wrapped = reflow("Rebuilt the checkout API in Python and FastAPI, replacing a\n"
+                     "legacy Flask service.")
+    assert wrapped == "Rebuilt the checkout API in Python and FastAPI, replacing a legacy Flask service."
+
+    # A wrap landing just before a proper noun still joins, because the previous
+    # line ends on a word that cannot end a sentence.
+    assert reflow("Strong commercial experience with\nPython and FastAPI") == (
+        "Strong commercial experience with Python and FastAPI")
+
+
+def test_letter_spaced_headings_are_repaired():
+    """Designer CV templates set letter-spacing, which extracts as 'C O N T A C T'."""
+    from app.rag.loader import unspace
+
+    assert unspace("C O N T A C T") == "CONTACT"
+    assert unspace("S o f t w a r e  E n g i n e e r") == "Software  Engineer"
+    # Ordinary prose, including real single-letter words, is left alone.
+    assert unspace("I am a backend engineer") == "I am a backend engineer"
+    assert unspace("Python, SQL and Go") == "Python, SQL and Go"

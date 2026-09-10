@@ -1,0 +1,31 @@
+About the job
+About Northwind
+People deserve more from their money. We are building the financial
+superapp, and we are growing fast.
+
+About the role
+Our Technology team builds the systems that keep the product running. Our
+stack includes Java 17/21, GCP, Kubernetes, Grafana and PostgreSQL.
+
+What you'll be doing
+Building mobile APIs
+Developing microservices to evolve our architecture
+Owning services end to end, including on-call
+
+What you'll need
+Fluency with Java
+4+ years of experience in backend development
+A bachelor's degree in computer science, maths, physics, or a similar field
+Excellent communication and organisational skills
+Fluency in English
+
+Nice to have
+Proficiency with Kotlin or Scala
+A background in finance
+Experience in a startup or scale-up
+
+Compensation range
+Krakow: PLN36,000 - PLN40,000 gross monthly
+
+Important notice for candidates
+Job scams are on the rise. We will never ask for payment during hiring.

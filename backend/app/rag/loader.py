@@ -4,6 +4,7 @@ Two sources produce the same LoadedDocument, so everything downstream —
 chunking, embedding, retrieval — is identical for both.
 """
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -11,6 +12,18 @@ from pypdf import PdfReader
 
 from app.config import get_settings
 from app.exceptions import InvalidUpload, UnparseablePDF
+
+
+# Designer CV templates set letter-spacing on headings, which PDF extraction
+# renders as "C O N T A C T" or "S o f t w a r e". Every downstream stage —
+# tokenising, section detection, citation quoting — is damaged by it, so it is
+# repaired at the point of extraction. Four letters minimum, so ordinary
+# single-letter words ("I a m") are left alone.
+_LETTER_SPACED = re.compile(r"\b(?:[A-Za-z]\u0020){3,}[A-Za-z]\b")
+
+
+def unspace(text: str) -> str:
+    return _LETTER_SPACED.sub(lambda m: m.group(0).replace(" ", ""), text)
 
 
 @dataclass
@@ -46,7 +59,7 @@ def load_pdf(path: Path) -> LoadedDocument:
         )
 
     pages = [
-        LoadedPage(number=i + 1, text=(p.extract_text() or "").strip())
+        LoadedPage(number=i + 1, text=unspace((p.extract_text() or "").strip()))
         for i, p in enumerate(reader.pages)
     ]
     doc = LoadedDocument(pages=pages)

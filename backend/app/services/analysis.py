@@ -6,7 +6,7 @@ from pathlib import Path
 from sqlmodel import Session, delete, select
 
 from app.config import get_settings
-from app.exceptions import DocumentNotReady
+from app.exceptions import DocumentNotReady, NoRequirementsFound
 from app.llm.contracts import MatchReportOut, RequirementsOut
 from app.llm.structured import complete_structured
 from app.models import (
@@ -66,6 +66,15 @@ def run_analysis(
         temperature=0.0,
     )
     requirements = [r.model_dump() for r in reqs_out.requirements]
+    if not requirements:
+        # Without requirements every CV matches perfectly, which is worse than
+        # no answer: the user would act on a score that means nothing.
+        raise NoRequirementsFound(
+            "No requirements could be read from this job description. Check that "
+            "you pasted the full posting, including the section listing what the "
+            "role needs — not just the company description.",
+            {"session_id": session.id},
+        )
 
     # 1b. Retrieve CV evidence for each requirement.
     evidence: dict[str, list[dict]] = {}

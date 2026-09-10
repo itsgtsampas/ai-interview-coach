@@ -44,6 +44,17 @@ class InvalidUpload(DomainError):
     status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
 
 
+class NoRequirementsFound(DomainError):
+    """The job description parsed, but no requirements could be read from it.
+
+    Scoring a CV against nothing produces a meaningless perfect match, so this
+    is surfaced to the user instead.
+    """
+
+    code = "no_requirements_found"
+    status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
+
+
 class StageNotReady(DomainError):
     code = "stage_not_ready"
     status_code = status.HTTP_409_CONFLICT
