@@ -2,10 +2,11 @@ import { useEffect, useState } from "react";
 import { Link, useOutletContext } from "react-router-dom";
 
 import { api, ApiError } from "../api/client";
-import type { MatchReport, SessionOut } from "../api/types";
+import type { MatchReport, SessionOut, Suggestion } from "../api/types";
 import {
   Chip, ErrorBox, EvidenceLine, Gauge, Head, Row, Spinner, Verdict,
 } from "../components/bits";
+import { RewriteCard } from "../components/RewriteCard";
 
 interface Ctx { session: SessionOut | null; refresh: () => Promise<void> }
 
@@ -15,6 +16,9 @@ export function Report() {
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const [missing, setMissing] = useState(false);
+  // Suggestions already written for this session, so revisiting the page does
+  // not hide work the user has paid for.
+  const [rewrites, setRewrites] = useState<Record<number, Suggestion>>({});
 
   useEffect(() => {
     if (!session) return;
@@ -24,6 +28,9 @@ export function Report() {
         if (err instanceof ApiError && err.status === 404) setMissing(true);
         else setError(err);
       });
+    api.listRewrites(session.id)
+      .then((all) => setRewrites(Object.fromEntries(all.map((r) => [r.match_item_id, r]))))
+      .catch(() => setRewrites({}));
   }, [session?.id]);
 
   async function run() {
@@ -104,6 +111,12 @@ export function Report() {
             page={item.evidence_page}
             section={item.evidence_section}
             status={item.status}
+          />
+          <RewriteCard
+            sessionId={session?.id ?? 0}
+            itemId={item.id}
+            status={item.status}
+            existing={rewrites[item.id]}
           />
         </Row>
       ))}

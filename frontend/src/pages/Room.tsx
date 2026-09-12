@@ -6,6 +6,7 @@ import type { Answer, Question, SessionOut } from "../api/types";
 import {
   Bars, Chip, ErrorBox, Head, Row, Spinner, toneForScore,
 } from "../components/bits";
+import { streamRequest } from "../lib/sse";
 
 interface Ctx { session: SessionOut | null; refresh: () => Promise<void> }
 
@@ -66,6 +67,8 @@ export function Room() {
   const [answer, setAnswer] = useState<Answer | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
+  // Pipeline stages as they are reported, so the wait shows progress.
+  const [stages, setStages] = useState<string[]>([]);
   const [seconds, setSeconds] = useState(0);
 
   const current = questions?.[index];
@@ -117,8 +120,16 @@ export function Room() {
     if (!current) return;
     setBusy(true);
     setError(null);
+    setStages([]);
     try {
-      const a = await api.submitAnswer(current.id, text.trim(), seconds);
+      // Scoring takes seconds and produces a structured result, not prose, so
+      // there is nothing to type out token by token. What the stream gives is
+      // the pipeline reporting itself — which beats a spinner that says nothing.
+      const a = await streamRequest<Answer>(
+        `/questions/${current.id}/answers/stream`,
+        { text: text.trim(), duration_seconds: seconds },
+        { onStage: (_key, label) => setStages((all) => [...all, label]) },
+      );
       setAnswer(a);
       setQuestions((qs) =>
         qs ? qs.map((q) => (q.id === current.id ? { ...q, answered: true } : q)) : qs);
@@ -127,6 +138,7 @@ export function Room() {
       setError(err);
     } finally {
       setBusy(false);
+      setStages([]);
     }
   }
 
@@ -230,6 +242,24 @@ export function Room() {
               placeholder="Answer out loud first, then type what you actually said. Aim for 90 seconds of speech."
               onChange={(e) => setText(e.target.value)}
             />
+            {/* Each stage the server reports, ticked off as it completes. The
+                live region announces only the newest line, so a screen reader
+                is not read the whole list again on every update. */}
+            {busy || stages.length ? (
+              <ol className="stages" aria-label="Scoring progress">
+                {stages.map((label, i) => (
+                  <li key={`${label}-${i}`} className="stages__s"
+                      data-state={i === stages.length - 1 && busy ? "now" : "done"}>
+                    <span className="stages__dot" aria-hidden="true" />
+                    {label}
+                  </li>
+                ))}
+              </ol>
+            ) : null}
+            <p className="visually-hidden" role="status" aria-live="polite">
+              {busy && stages.length ? stages[stages.length - 1] : ""}
+            </p>
+
             <div className="split" style={{ marginTop: "0.7rem" }}>
               {!answer ? (
                 <button className="btn" onClick={submit} disabled={busy || text.trim().length < 10}>

@@ -24,14 +24,17 @@ from app.services.scorecard import get_scorecard
 logger = logging.getLogger("cvcoach.pdf")
 
 # --- the product palette, as RGB -------------------------------------------
+# Mirrors the tokens in frontend/src/styles.css. Kept in sync by hand: the two
+# renderers cannot share a stylesheet, and a scorecard whose verdict colours
+# disagree with the screen it was exported from is worse than either alone.
 INK = (19, 26, 25)
 INK_2 = (69, 81, 79)
-INK_3 = (123, 135, 133)
+INK_3 = (101, 111, 109)
 RULE = (201, 210, 208)
 PAPER_2 = (247, 249, 248)
 VERDICT = {
     "strong": (44, 106, 74),
-    "partial": (168, 118, 26),
+    "partial": (144, 101, 22),
     "missing": (158, 51, 36),
 }
 VERDICT_COPY = {"strong": "Evidenced", "partial": "Thin", "missing": "No evidence"}

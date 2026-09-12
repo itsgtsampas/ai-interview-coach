@@ -44,7 +44,7 @@ export function Coach() {
 
   return (
     <div className="sheet">
-      <Head margin={<span className="label">Stage 5</span>}>
+      <Head margin={<span className="label">Stage 6</span>}>
         <h1 className="display h1">Coach</h1>
         <p className="prose" style={{ marginBottom: 0 }}>
           The coach can read your CV, the job description, your gap analysis and your

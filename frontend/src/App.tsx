@@ -11,7 +11,9 @@ import { Spinner } from "./components/bits";
 import { AuthProvider, useAuth } from "./lib/auth";
 import { Coach } from "./pages/Coach";
 import { Dashboard } from "./pages/Dashboard";
+import { Letter } from "./pages/Letter";
 import { Profile } from "./pages/Profile";
+import { Progress } from "./pages/Progress";
 import { Report } from "./pages/Report";
 import { Room } from "./pages/Room";
 import { ScorecardPage } from "./pages/ScorecardPage";
@@ -74,6 +76,7 @@ function Routing() {
       <Route element={<Protected />}>
         <Route element={<Shell session={null} refresh={async () => {}} withRail={false} />}>
           <Route index element={<Dashboard />} />
+          <Route path="/progress" element={<Progress />} />
           <Route path="/profile" element={<Profile />} />
         </Route>
         <Route path="/session/:id" element={<SessionShell />}>
@@ -82,6 +85,7 @@ function Routing() {
           <Route path="report" element={<Report />} />
           <Route path="room" element={<Room />} />
           <Route path="scorecard" element={<ScorecardPage />} />
+          <Route path="letter" element={<Letter />} />
           <Route path="coach" element={<Coach />} />
         </Route>
       </Route>

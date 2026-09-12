@@ -37,6 +37,13 @@ class Settings(BaseSettings):
     # A text PDF yields far more than this per page; below it, assume a scan.
     min_chars_per_page: int = 150
 
+    # Demo aid, off by default. The stub answers in about five milliseconds, so
+    # a stream finishes before the browser paints a frame and the streaming UI
+    # is never seen. Setting this pauses between chunks so the transport can be
+    # demonstrated without a provider key. It is NOT product behaviour: it adds
+    # latency that does not exist, and it stays 0 everywhere but a demo.
+    stub_stream_delay_ms: int = 0
+
     # Rate limiting. Ceilings live in app/ratelimit.py; this only switches the
     # whole mechanism off, which the test suite needs and nothing else should.
     disable_rate_limits: bool = False

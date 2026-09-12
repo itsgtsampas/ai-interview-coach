@@ -44,6 +44,7 @@ export function TopBar() {
 
       <nav className="topbar__nav" aria-label="Sections">
         <NavLink to="/" end className="topbar__link">Sessions</NavLink>
+        <NavLink to="/progress" className="topbar__link">Progress</NavLink>
         <NavLink to="/profile" className="topbar__link">Profile</NavLink>
       </nav>
 
@@ -63,6 +64,10 @@ export function TopBar() {
               {user?.full_name}
               <span className="menu__email">{user?.email}</span>
             </p>
+            <Link to="/progress" className="menu__item" role="menuitem"
+                  onClick={() => setMenuOpen(false)}>
+              Your progress
+            </Link>
             <Link to="/profile" className="menu__item" role="menuitem"
                   onClick={() => setMenuOpen(false)}>
               Your profile

@@ -10,12 +10,14 @@ Swap it for OpenAIProvider by setting LLM_PROVIDER=openai; no calling code chang
 
 import json
 import re
+import time
 from collections.abc import Iterator
 from typing import Any
 
 from pydantic import BaseModel
 
 from app.llm.base import AgentStep, LLMResponse, RenderedPrompt, ToolSpec
+from app.config import get_settings
 from app.llm.tokens import estimate_tokens
 from app.sse import chunk_words
 from app.textutil import (
@@ -203,7 +205,12 @@ class StubLLMProvider:
         }.get(prompt.stage)
         if prose is None:
             raise ValueError(f"stub provider cannot stream stage {prompt.stage!r}")
-        yield from chunk_words(prose(prompt.payload), per_chunk=2)
+
+        delay = get_settings().stub_stream_delay_ms / 1000
+        for chunk in chunk_words(prose(prompt.payload), per_chunk=2):
+            if delay:
+                time.sleep(delay)
+            yield chunk
 
     @staticmethod
     def _conclusive(observation: str | None) -> bool:
@@ -752,7 +759,8 @@ class StubLLMProvider:
         (("design", "architect", "model"), "Designed"),
         (("build", "develop", "implement", "create", "deliver"), "Built"),
         (("migrat", "port", "moderni"), "Migrated"),
-        (("maintain", "support", "operat", "run "), "Operated"),
+        (("maintain", "support", "operat", "run ", "orchestrat", "container",
+          "cluster", "on-call", "reliability"), "Operated"),
         (("test", "qa", "quality"), "Tested"),
         (("optimis", "optimiz", "performance", "scal", "tune"), "Optimised"),
         (("secur", "auth", "complian"), "Hardened"),
@@ -788,7 +796,10 @@ class StubLLMProvider:
         cv_context: str = payload.get("cv_context", "")
 
         low = requirement.lower()
-        tech = [t for t in salient_terms(requirement)][:3]
+        # salient_terms normalises to lowercase for matching. A CV bullet that
+        # says "using graphql" looks like it was written by a machine, so the
+        # surface form is recovered from the requirement it came from.
+        tech = [self._as_written(t, requirement) for t in salient_terms(requirement)[:3]]
         subject = ", ".join(tech) if tech else _clip(requirement.rstrip("."), 60)
 
         verb = next(
@@ -833,6 +844,8 @@ class StubLLMProvider:
         # The alternative for someone who genuinely does not have it. Naming the
         # smallest real thing is more useful than telling them to "gain experience".
         adjacent = self._nearest_cv_topic(cv_context, requirement)
+        if adjacent:
+            adjacent = self._as_written(adjacent, cv_context)
         if_you_cannot = (
             f"If you have not done this, do not write it. The smallest version that "
             f"earns the bullet honestly: build one small thing with {subject} "
@@ -847,6 +860,12 @@ class StubLLMProvider:
             "if_you_cannot": if_you_cannot,
             "placeholders": placeholders,
         }
+
+    @staticmethod
+    def _as_written(term: str, source: str) -> str:
+        """The term as it appears in the source, preserving GraphQL, CI/CD, PostgreSQL."""
+        match = re.search(re.escape(term).replace(r"\ ", r"\s+"), source, re.I)
+        return match.group(0) if match else term
 
     @staticmethod
     def _nearest_cv_topic(cv_context: str, requirement: str) -> str | None:
@@ -886,6 +905,9 @@ class StubLLMProvider:
 
         lead = evidenced[0] if evidenced else None
         opener = self._OPENERS[tone].format(role=role, company=company)
+        # "...the Senior Python Engineer role. The requirement I match most
+        # directly is Senior Python Engineer." Extractors sometimes lift the job
+        # title out of the posting as a requirement; saying it back is absurd.
         if lead:
             opener += (
                 f" The requirement I match most directly is "
@@ -901,11 +923,17 @@ class StubLLMProvider:
             if not quote:
                 continue
             used.append(item["requirement"])
-            paragraphs.append(
-                f"{self._first_person(quote)} "
-                f"That is the experience behind "
-                f"{self._lower_first(_clip(item['requirement'], 80))}."
-            )
+            sentence = self._first_person(quote)
+            # The opening paragraph already named the lead requirement; saying
+            # it again two sentences later reads like a form letter.
+            if item is not lead and not self._echoes(quote, item["requirement"]):
+                bare, stripped = self._bare_requirement(item["requirement"])
+                tail = _clip(bare, 80)
+                sentence += (
+                    f" That is the experience behind "
+                    f"{tail if stripped else self._lower_first(tail)}."
+                )
+            paragraphs.append(sentence)
 
         # The honest acknowledgement. One sentence, no apology — and only for a
         # must-have, because listing every nice-to-have you lack is self-sabotage.
@@ -949,7 +977,10 @@ class StubLLMProvider:
         r"^(?:(?:strong|solid|proven|demonstrable|deep|extensive|hands[- ]on|"
         r"production|commercial|significant|excellent|good)\s+){0,3}"
         r"(?:experience|background|track record|understanding|knowledge|familiarity)"
-        r"\s*(?:in|with|of|designing|building|working with)?\s+",
+        # Only prepositions are lead-in. A gerund is the requirement itself:
+        # dropping "building" from "experience building and maintaining CI/CD
+        # pipelines" changes what is being asked for.
+        r"\s*(?:in|with|of)?\s+",
         re.I,
     )
 
@@ -963,9 +994,20 @@ class StubLLMProvider:
         """
         original = text.strip()
         stripped = cls._REQ_LEAD_IN.sub("", original).strip()
+        # The lead-in can end on a gerund ("Experience building ...and
+        # maintaining CI/CD pipelines"), leaving a conjunction at the front.
+        stripped = re.sub(r"^(?:and|or|with|in|of)\s+", "", stripped, flags=re.I)
         if stripped and stripped != original:
             return stripped, True
         return original, False
+
+    @staticmethod
+    def _echoes(quote: str, requirement: str) -> bool:
+        """Does the quote already say what the requirement asked for, in its words?"""
+        q, r = set(tokens(quote)), set(tokens(requirement))
+        if not r:
+            return False
+        return len(r - q) <= 1
 
     @staticmethod
     def _lower_first(text: str) -> str:
@@ -987,7 +1029,7 @@ class StubLLMProvider:
         payment service…"), so the transform is usually just a pronoun. When the
         sentence does not start that way, wrapping it is safer than mangling it.
         """
-        text = quote.strip().rstrip(".").strip()
+        text = quote.strip().rstrip(".,;:").strip()
         if not text:
             return ""
         if cls._PAST_VERB.match(text):

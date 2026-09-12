@@ -166,3 +166,74 @@ export interface ProfileOut extends ProfileUpdate {
   cv_uploaded_at: string | null;
   updated_at: string;
 }
+
+/* --- cross-session progress ---------------------------------------------- */
+
+export interface ProgressPoint {
+  session_id: number;
+  title: string;
+  target_role: string;
+  created_at: string;
+  match_score: number | null;
+  readiness_score: number | null;
+  answers: number;
+  mean_answer_score: number | null;
+}
+
+export interface RecurringGap {
+  requirement: string;
+  missing_in: number;
+  sessions: string[];
+}
+
+export interface CompetencyTrend {
+  name: string;
+  first: number;
+  latest: number;
+  delta: number;
+  points: number[];
+}
+
+export interface Progress {
+  sessions_total: number;
+  sessions_scored: number;
+  answers_total: number;
+  mean_answer_score: number | null;
+  best_readiness: number | null;
+  latest_readiness: number | null;
+  readiness_delta: number | null;
+  mean_match: number | null;
+  /** False when there are too few scored sessions for a line to mean anything. */
+  has_trend: boolean;
+  points: ProgressPoint[];
+  recurring_gaps: RecurringGap[];
+  competencies: CompetencyTrend[];
+}
+
+/* --- derived writing ------------------------------------------------------ */
+
+export interface Suggestion {
+  id: number;
+  match_item_id: number;
+  requirement: string;
+  bullet: string;
+  premise: string;
+  why: string;
+  if_you_cannot: string;
+  /** The facts the candidate must supply. Never filled in by the model. */
+  placeholders: string[];
+  prompt_version: string;
+}
+
+export type LetterTone = "plain" | "warm" | "formal";
+
+export interface CoverLetter {
+  id: number;
+  session_id: number;
+  tone: LetterTone;
+  subject: string;
+  body: string;
+  claims_used: string[];
+  prompt_version: string;
+  created_at: string;
+}

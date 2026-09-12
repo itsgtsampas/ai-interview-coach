@@ -741,7 +741,9 @@ than to dropping a capability.
 ## 14. Future extensions
 
 Everything here was considered and deliberately not built. The reasoning matters more
-than the list: each entry says what would be gained and what stopped it.
+than the list: each entry says what would be gained and what stopped it. Two entries that
+were on this list — streaming and the PDF export — have since been built; they are
+described in section 16.
 
 ### 14.1 Reading a job description from its URL
 
@@ -806,11 +808,13 @@ The likely cause is that the lexical embedder retrieves the same chunks for a pa
 It should be re-measured against semantic embeddings and, if it still shows nothing,
 removed — it costs an LLM call per requirement in the `openai` configuration.
 
-### 14.6 Streaming evaluations, and exporting the scorecard
+### 14.6 Rendering the PDF outside Latin-1
 
-Section 7 specifies an SSE endpoint so evaluation feedback appears as it is written rather
-than after a pause, and a PDF export of the scorecard. Both are straightforward; neither
-changes what the system can determine about a candidate, which is why they were cut first.
+The scorecard PDF (section 16.4) uses fpdf2's built-in Helvetica, whose encoding is
+Latin-1. Typographic punctuation is transliterated; Greek, Cyrillic and CJK are replaced
+with `?`. Dropping a TrueType font into `backend/app/assets/fonts/` switches it to full
+Unicode with no code change — it is not committed because a 1.5 MB binary in a teaching
+repository has to earn its place, and the English path does not need it.
 
 ### 14.7 Longer context instead of chunking
 
@@ -839,3 +843,190 @@ Against the eight stated criteria on slide 18:
 - **Δημιουργικότητα** — the evaluation harness. Most submissions will assert that their prompts
   and retrieval work. This one measures it, publishes the ablations, and shows the v1→v2
   improvement it caused.
+
+---
+
+## 16. Second build: delivery, exports and cross-session work
+
+Six features added after the first release. Three of them put a model in front of a user
+in a new way, and each is built so that the *dishonest* version is unreachable rather than
+merely discouraged — that constraint is the interesting part, not the feature list.
+
+### 16.1 Rate limiting
+
+Three ceilings, three different reasons:
+
+| Group | Limit | Why |
+|---|---|---|
+| `POST /auth/login` | 5/min | An uncapped login is where a password list gets walked. |
+| `POST /auth/register` | 10/hour | Account-creation spam. |
+| Every stage that reaches a model | 30/hour | With a provider key set, each call is money. A loop in the client — or a bored visitor — spends it. |
+| Uploads and the PDF export | 40/hour | PDFs land on disk and in the vector store. |
+
+**Keying.** Authenticated callers are limited by user id, set on `request.state` by the auth
+dependency. One tenant cannot exhaust another's budget, and a shared NAT address is not a
+shared ceiling. Anonymous callers fall back to the client address, which is all that exists
+before a token does — and is the right key for the login endpoint specifically.
+
+A 429 renders in the application's single error shape (`error`, `message`, `details`,
+`request_id`) and carries `Retry-After`. `X-RateLimit-*` headers are off: slowapi injects
+them only into endpoints that declare a `response: Response` parameter, which is ten noisy
+signatures to advertise a budget nothing reads.
+
+The limiter is disabled in the test suite, which makes more requests per second than any
+sane ceiling allows. `tests/test_ratelimit.py` switches it back on around itself, so the
+mechanism is exercised without every other test having to budget for it — including a test
+that two accounts behind one address do not share a budget.
+
+### 16.2 SSE, and what is honestly streamable
+
+**SSE rather than WebSocket.** Everything here flows one way, server to browser. SSE is
+ordinary HTTP, so it inherits the existing bearer auth, the CORS configuration and any
+reverse proxy without teaching them a second protocol. A WebSocket would buy
+bidirectionality this application has no use for.
+
+**fetch rather than EventSource** on the client. `EventSource` can only issue GET and
+cannot set headers, so the bearer token would have to travel in the query string — into
+server logs and browser history. Reading the stream off a normal `fetch` keeps the
+`Authorization` header and allows POST, at the cost of parsing the wire format in
+`frontend/src/lib/sse.ts` (about sixty lines).
+
+**Two endpoints stream, and they stream different things.**
+
+- `POST /sessions/{id}/cover-letter/stream` emits `token` events. This is prose; it is
+  genuinely produced a piece at a time, and with `LLM_PROVIDER=openai` those are real
+  model tokens passed straight through.
+- `POST /questions/{id}/answers/stream` emits `stage` events only. An evaluation is a
+  structured object, and a half-parsed JSON object is not something an interface can
+  render. Streaming the four stages the pipeline actually runs removes the dead spinner
+  without pretending to stream something that is not streaming.
+
+**Errors.** Ownership is checked before the response opens, so an unauthorised caller gets
+a 404 with a status line. Once a `StreamingResponse` has begun the status line is already
+sent, and a failure can only travel as an `error` event inside a 200 — which is why
+anything checkable is checked first. The client treats a stream that ends without a `done`
+frame as a failure, because it is one.
+
+**Sessions.** A streaming endpoint's injected DB session closes when the function returns,
+which for a generator is *before* it runs. Each stream opens and owns its own.
+
+**Provider boundary.** `complete_stream()` lives in `llm/structured.py` beside
+`complete_structured()`, so the invariant that nothing else in the application talks to a
+provider survives, and a telemetry row is still written whatever happens. It is not cached:
+a cached stream replays instantly, which is indistinguishable from the blocking path and
+would make this stage's cost invisible in exactly the telemetry you would consult.
+
+**One honest caveat.** The stub answers in about five milliseconds, so offline a stream
+finishes before the browser paints. `STUB_STREAM_DELAY_MS` pauses between chunks so the
+transport can be demonstrated without a key. It defaults to `0` and is a demo aid, not
+product behaviour: it adds latency that does not exist.
+
+### 16.3 CV bullet rewrites: a shape, not a claim
+
+Asked to "fix this gap", a model will write *"Led migration of 40 microservices to
+Kubernetes, reducing p99 latency by 45%"* for someone who has never touched Kubernetes.
+The output reads superbly and gets the candidate caught in the first ten minutes of a
+technical screen. This is the most dangerous feature in the product.
+
+So the contract is inverted. The stage does not write a claim; it writes a **shape**, with
+every fact it does not have left as an explicit `[placeholder]`. The prompt teaches this
+with few-shot examples, the third of which is a negative example showing the invented
+version being rejected. The service refuses to store a suggestion that came back with no
+placeholders when the CV had no evidence, and `test_a_bullet_never_invents_a_number`
+asserts that every digit in a suggestion falls inside a placeholder.
+
+The interface carries the same message: placeholders render as dashed, amber, unfinished
+text, under the line *"Nothing in this bullet is a claim about you until you make it one."*
+Each suggestion also carries an `if_you_cannot` — the smallest real thing that would earn
+the bullet honestly — because telling someone to "gain experience" is not advice.
+
+### 16.4 Cover letters, grounded structurally
+
+The letter is assembled from the gap analysis, not from the CV. Requirements marked
+`strong` are passed in *with the sentence that earned the mark*; requirements the CV did
+not evidence are passed in a separate list precisely so the prompt can name them as
+forbidden. A requirement the CV cannot support therefore cannot appear as a strength by
+construction, not by instruction.
+
+If nothing was evidenced, the letter says so and stops. A short honest letter is the
+correct output; padding it is the failure.
+
+Material selection lives in the service so both the blocking and streaming paths agree on
+what the letter was built from. Two decisions there are worth naming:
+
+- Evidence is ranked by whether the quote is an *achievement* before confidence. A
+  high-confidence match quoting a CV heading ("Senior Backend Engineer, Nexora Commerce
+  (2021–2024)") makes a worse paragraph than a weaker one quoting something the candidate
+  did, because only the second rewrites into a first-person claim.
+- A "requirement" that merely restates the job title is dropped. Extractors lift the
+  posting's headline out sometimes, and left in, the letter says *"…the Senior Python
+  Engineer role. The requirement I match most directly is Senior Python Engineer."*
+
+### 16.5 Progress across sessions
+
+Every other page judges one application. This one aggregates all of them, which is the only
+place two things become visible: whether practice is moving the score, and **which gap keeps
+costing offers**. A requirement missing in one posting is a mismatch; the same requirement
+missing in four is the thing to go and learn.
+
+Grouping keys on the head salient term, so "Terraform" and "Terraform or similar IaC" count
+once. This over-merges rather than under-merges — "AWS Lambda" and "AWS S3" both key on
+"aws". For a list whose purpose is *go and learn this*, collapsing a family of related gaps
+under one heading is the useful error; splitting one recurring gap into three singletons
+that never reach the threshold is not.
+
+No model is called. Every number aggregates stored rows, so the page is free and
+reproducible.
+
+### 16.6 Charts, and the rule they had to obey
+
+Hand-rolled SVG, not a charting library. Two chart shapes, twenty lines each, against
+~90 kB of bundle and a second design system to override — but the deciding reason is that
+*colour means judgement* has to hold inside the charts too, and every library ships a
+categorical palette that breaks it on the first render.
+
+So axes, grid and lines are achromatic; the only coloured marks are the data points, each
+of which **is** a verdict, on the same three-step scale as every verdict elsewhere. The two
+band thresholds are drawn as labelled dashed rules, which turns the y-axis into a legend:
+the reader sees which band a point is in without decoding its colour.
+
+Three deliberate restraints:
+
+- **No trend line below three points.** A line through two dots asserts a direction the
+  data does not support; the page shows figures instead and says why.
+- **The x-axis is numbered, not dated.** Points are evenly spaced whether they were a day
+  or a month apart, so numbering states what is actually plotted. Session titles are long
+  and similar — three of them truncate to "Meridian La…", which labels nothing — so
+  identity lives in the readout, where there is room for it.
+- **The readout is text in a fixed place**, not a floating tooltip: it works on touch, and
+  it is announced without a hover event. Every chart is backed by a real `<table>` behind a
+  "Show the numbers" disclosure.
+
+### 16.7 The scorecard PDF
+
+Laid out for print, not screenshotted: one column, a fixed measure, the evidence line
+rendered as a marked-up quote with its verdict rule, and a provenance footer naming the
+prompt versions that produced the numbers. Served as an authenticated response returning
+bytes rather than a signed public URL, because it quotes the candidate's CV and must not be
+reachable by anyone holding a link. The browser fetches it with its `Authorization` header
+and hands the blob to a synthetic link, revoking the object URL immediately.
+
+### 16.8 Accessibility fixes this work forced
+
+Auditing the new pages surfaced two contrast failures against WCAG AA, both of which
+predated this work and one of which was everywhere:
+
+| Token | Was | Now | Measured on `--paper` |
+|---|---|---|---|
+| `--ink-3` | `#7b8785` | `#656f6d` | 3.24:1 → 4.52:1 |
+| `--partial` | `#a8761a` | `#906516` | 3.47:1 → 4.51:1 |
+| `--partial-wash` | `#f0e6d2` | `#f5efe2` | chip label 4.18:1 → 4.51:1 |
+
+`--ink-3` is the hint colour used on nearly every page. `--partial` is amber, which is
+always the hardest hue to keep legible small: it was fine behind a 40 px ring and failing
+behind a 17 px score in a list. Both were darkened along their own hue, so the palette
+reads the same. `--strong` (5.60:1) and `--missing` (6.20:1) already passed.
+
+Every text node on all seven pages now clears AA at its rendered size. The PDF carries a
+second copy of these values — the two renderers cannot share a stylesheet — and was updated
+with them.

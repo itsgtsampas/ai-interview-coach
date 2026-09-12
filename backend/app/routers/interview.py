@@ -1,5 +1,6 @@
 import json
 import logging
+import time
 from typing import Annotated
 
 from fastapi import APIRouter, Query, Request, status
@@ -8,6 +9,7 @@ from sqlmodel import Session, select
 
 from app import sse
 from app.db import engine
+from app.config import get_settings
 from app.exceptions import DomainError
 from app.ratelimit import GENERATE_LIMIT, limit
 
@@ -139,6 +141,8 @@ def submit_answer_streaming(
     session_id = sess.id or 0
     text, duration = body.text, body.duration_seconds
 
+    pause = get_settings().stub_stream_delay_ms / 1000
+
     def events():
         # A fresh session: the injected one closes when this function returns,
         # which happens before the generator is consumed.
@@ -153,10 +157,16 @@ def submit_answer_streaming(
                 own.commit()
                 own.refresh(answer)
 
+                if pause:
+                    time.sleep(pause * 8)
                 yield sse.stage("rubric", "Choosing the rubric for this question")
+                if pause:
+                    time.sleep(pause * 8)
                 yield sse.stage("scoring", "Scoring against each criterion")
                 evaluation = evaluate(answer, q, own, session_id)
 
+                if pause:
+                    time.sleep(pause * 8)
                 yield sse.stage("writing", "Writing the feedback")
                 payload = AnswerOut(
                     id=answer.id or 0,

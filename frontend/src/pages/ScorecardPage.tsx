@@ -3,7 +3,9 @@ import { Link, useOutletContext } from "react-router-dom";
 
 import { api, ApiError } from "../api/client";
 import type { Scorecard, SessionOut } from "../api/types";
-import { Bars, Chip, ErrorBox, Gauge, Head, Row, Spinner } from "../components/bits";
+import { Bars, Chip, ErrorBox, Head, Row, Spinner } from "../components/bits";
+import { Ring } from "../components/charts";
+import { DownloadPdf } from "../components/DownloadPdf";
 
 interface Ctx { session: SessionOut | null; refresh: () => Promise<void> }
 
@@ -70,9 +72,13 @@ export function ScorecardPage() {
     <div className="sheet">
       <Head margin={<span className="label">Stage 4</span>}>
         <h1 className="display h1">Scorecard</h1>
-        <Gauge value={card.readiness_score} />
-        <p className="label" style={{ marginTop: "0.2rem" }}>{card.readiness_band}</p>
-        <p className="prose" style={{ marginTop: "1rem" }}>{card.summary}</p>
+        <div className="scorehead">
+          <Ring value={card.readiness_score} label={card.readiness_band} />
+          <div>
+            <p className="prose scorehead__sum">{card.summary}</p>
+            <DownloadPdf sessionId={card.session_id} />
+          </div>
+        </div>
         <ErrorBox error={error} />
       </Head>
 
@@ -122,6 +128,9 @@ export function ScorecardPage() {
           <button className="btn btn--ghost" onClick={build} disabled={busy}>
             {busy ? "Rebuilding…" : "Rebuild from latest answers"}
           </button>
+          <Link className="btn btn--ghost" to={`/session/${session?.id}/letter`}>
+            Write a cover letter
+          </Link>
           <Link className="btn btn--ghost" to={`/session/${session?.id}/coach`}>
             Ask the coach
           </Link>

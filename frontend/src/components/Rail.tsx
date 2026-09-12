@@ -11,7 +11,8 @@ const STAGES = [
   { n: 2, to: "report", label: "Gap analysis" },
   { n: 3, to: "room", label: "Practice" },
   { n: 4, to: "scorecard", label: "Scorecard" },
-  { n: 5, to: "coach", label: "Coach" },
+  { n: 5, to: "letter", label: "Cover letter" },
+  { n: 6, to: "coach", label: "Coach" },
 ] as const;
 
 type Stage = (typeof STAGES)[number];
@@ -27,7 +28,7 @@ function isDone(stage: Stage, s: SessionOut | null): boolean {
   if (stage.to === "report") return s.has_analysis;
   if (stage.to === "room") return s.question_count > 0 && s.answered_count === s.question_count;
   if (stage.to === "scorecard") return s.readiness_score != null;
-  return false;
+  return false;  // the letter and the coach are revisitable, never "done"
 }
 
 /** Why a stage cannot be opened yet — shown to the user rather than left as a
@@ -39,6 +40,8 @@ function blockedBecause(stage: Stage, s: SessionOut | null): string | null {
   if (stage.to === "report") return null;
   if (!s.has_analysis) return "Run the gap analysis first";
   if (stage.to === "scorecard" && s.answered_count === 0) return "Answer a question first";
+  // The letter is written from the gap analysis alone, so it unlocks with it —
+  // it does not need a scorecard the way the rail's order might suggest.
   return null;
 }
 

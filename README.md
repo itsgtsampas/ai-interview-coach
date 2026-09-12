@@ -71,7 +71,16 @@ docker compose up
 | **2. Questions** | Writes technical and behavioural questions from those gaps, riskiest first, each anchored in your own words. | Few-shot (3 exemplars), prompt chaining |
 | **3. Feedback** | Scores your answer 1–5 on five rubric dimensions — STAR for behavioural, a technical rubric otherwise — reasoning *before* scoring, then gives a model answer and the follow-up a real interviewer would ask. | Few-shot calibration anchors, chain-of-thought, structured outputs |
 | **4. Scorecard** | Combines CV match (40%) with answer quality (60%) into a readiness score, competency averages, and prioritised action items. | Prompt chaining over stored stage outputs |
-| **5. Coach** | Answers free-form questions by choosing between four tools, and shows every lookup it made. | ReAct agent, tool calling |
+| **5. Cover letter** | Writes a letter from the requirements your CV *evidenced*, and the sentences that evidenced them. Requirements it could not find are never passed to the model, so they cannot appear as strengths. Streams as it is written. | Prompt chaining, structural grounding, SSE |
+| **6. Coach** | Answers free-form questions by choosing between four tools, and shows every lookup it made. | ReAct agent, tool calling |
+
+Alongside the stage sequence:
+
+| | |
+|---|---|
+| **CV bullet rewrites** | For any unmet requirement, the shape of the bullet that would answer it — with every fact you must supply left as a `[placeholder]`. It writes a template, never a claim: a model asked to "fix the gap" will happily invent *"Led migration of 40 microservices to Kubernetes"* for someone who has never touched it. |
+| **Progress** | Across every application at once. This is the only place a *recurring* gap becomes visible — missing one posting's requirement is a mismatch, missing the same one in four is the thing to go and learn. |
+| **PDF export** | The scorecard laid out for print, with the evidence quotes and the prompt versions that produced the numbers. |
 
 ---
 
@@ -82,8 +91,10 @@ cd backend
 .venv/bin/python -m pytest -q
 ```
 
-18 tests, fully offline and deterministic — including an end-to-end run of all five
-stages and a check that **no citation appears that is not verbatim in the source CV**.
+78 tests, fully offline and deterministic — including an end-to-end run of every stage, a
+check that **no citation appears that is not verbatim in the source CV**, a check that
+**no digit in a CV suggestion falls outside a placeholder**, and a check that the rate
+limiter charges two accounts behind one address separately.
 
 ---
 
@@ -131,4 +142,12 @@ docs/
 - The stub provider is lexical, not semantic: it matches vocabulary and known synonyms,
   so it will miss a paraphrase that shares no words. Switching to a real model and real
   embeddings removes this.
-- `create_all` builds the schema; a production deployment would use Alembic migrations.
+- `create_all` builds the schema, with a helper that adds missing nullable columns on
+  startup; a production deployment would use Alembic migrations.
+- The scorecard PDF renders with fpdf2's built-in Helvetica, which is Latin-1. Greek and
+  other non-Latin text becomes `?`. Dropping a TrueType font into
+  `backend/app/assets/fonts/` switches it to full Unicode with no code change.
+- Offline, the stub answers in about five milliseconds, so an SSE stream finishes before
+  the browser paints and the streaming UI is not visible. Set `STUB_STREAM_DELAY_MS=18` to
+  demonstrate the transport without an API key — it is a demo aid and defaults to `0`,
+  because it adds latency that does not exist.

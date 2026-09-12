@@ -1,6 +1,7 @@
 import type {
-  Answer, CoachResponse, DocumentKind, DocumentOut, Evaluation,
-  MatchReport, ProfileOut, ProfileUpdate, Question, Scorecard, SessionOut, User,
+  Answer, CoachResponse, CoverLetter, DocumentKind, DocumentOut, Evaluation,
+  LetterTone, MatchReport, Progress, ProfileOut, ProfileUpdate, Question,
+  Scorecard, SessionOut, Suggestion, User,
 } from "./types";
 
 const TOKEN_KEY = "cvcoach.token";
@@ -135,6 +136,46 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ message }),
     }),
+
+  progress: () => request<Progress>("/progress"),
+
+  suggestRewrite: (sessionId: number, itemId: number) =>
+    request<Suggestion>(`/sessions/${sessionId}/match-items/${itemId}/rewrite`, {
+      method: "POST",
+    }),
+  listRewrites: (sessionId: number) =>
+    request<Suggestion[]>(`/sessions/${sessionId}/rewrites`),
+
+  getCoverLetter: (id: number) => request<CoverLetter>(`/sessions/${id}/cover-letter`),
+  writeCoverLetter: (id: number, tone: LetterTone) =>
+    request<CoverLetter>(`/sessions/${id}/cover-letter`, {
+      method: "POST",
+      body: JSON.stringify({ tone }),
+    }),
+
+  /** Fetch the PDF as a blob.
+   *
+   *  It cannot be a plain link: the endpoint needs the Authorization header, and
+   *  putting the token in a query string would leak it into history and logs.
+   *  The caller is responsible for revoking the object URL. */
+  scorecardPdf: async (id: number): Promise<{ url: string; filename: string }> => {
+    const headers = new Headers();
+    const t = token.get();
+    if (t) headers.set("Authorization", `Bearer ${t}`);
+
+    const res = await fetch(`/api/v1/sessions/${id}/scorecard.pdf`, { headers });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new ApiError(res.status, body.error ?? "export_failed",
+        body.message ?? "The export failed.", body.details ?? {});
+    }
+    const disposition = res.headers.get("content-disposition") ?? "";
+    const match = /filename="([^"]+)"/.exec(disposition);
+    return {
+      url: URL.createObjectURL(await res.blob()),
+      filename: match?.[1] ?? "scorecard.pdf",
+    };
+  },
 };
 
 export type { Evaluation };

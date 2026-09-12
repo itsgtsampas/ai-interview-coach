@@ -87,9 +87,12 @@ Legend: **✅ built and exercised** · **🟡 partial** · **⬜ not started**
 | 09 OAuth2 password flow, JWT, bcrypt, `get_current_user` | ✅ | `security.py`, `routers/auth.py` |
 | 10 `APIRouter`, project structure, `pydantic-settings` + `.env` | ✅ | `routers/`, `config.py` |
 | 11 CORS, custom middleware, lifespan | ✅ | `main.py`, `middleware.py` (request-id + timing) |
-| 12 pytest, `TestClient`, `dependency_overrides`, in-memory DB | ✅ | `tests/` — 18 passing |
+| 12 pytest, `TestClient`, `dependency_overrides`, in-memory DB | ✅ | `tests/` — 78 passing |
 | 13 File uploads (`UploadFile`) | ✅ | `routers/documents.py` |
-| 13 WebSockets | ⬜ | **Deliberately omitted** — nothing here is bidirectional. Justification belongs in the report. |
+| 13 WebSockets | ⬜ | **Deliberately omitted** — nothing here is bidirectional. SSE was built instead: ordinary HTTP, so it inherits the existing auth, CORS and proxy config. See DESIGN §16.2. |
+| Server-Sent Events (`StreamingResponse`) | ✅ | `sse.py`, `routers/coaching.py`, `routers/interview.py` — real token streaming for prose, stage events for structured output |
+| Rate limiting (slowapi), keyed per account | ✅ | `ratelimit.py` — 429 in the app's own error shape, with `Retry-After` |
+| Binary responses (PDF) with `Content-Disposition` | ✅ | `routers/export.py`, `services/pdf_export.py` |
 | 14 Docker, production checklist, `/health` | ✅ | `Dockerfile`, `docker-compose.yml`, `/health/ready` |
 | uv / `pyproject.toml` | 🟡 | `pyproject.toml` present; built with venv+pip because `uv` is not installed on this machine. `uv sync` will work as-is. |
 | Alembic migrations | ⬜ | `create_all` for now; noted as a limitation. |
@@ -107,17 +110,24 @@ Legend: **✅ built and exercised** · **🟡 partial** · **⬜ not started**
 | Scorecard | ✅ |
 | Coach with tool trace | ✅ |
 | Responsive to mobile, keyboard focus, reduced-motion | ✅ |
-| SSE streaming of evaluations | ⬜ Evaluation returns synchronously |
-| PDF export of the scorecard | ⬜ |
+| SSE streaming (cover letter tokens, evaluation stages) | ✅ `lib/sse.ts` — fetch-based, so the bearer token stays out of the query string |
+| PDF export of the scorecard | ✅ `components/DownloadPdf.tsx` — authenticated blob fetch |
+| CV bullet rewrites per gap | ✅ `components/RewriteCard.tsx` — placeholders rendered as unfinished |
+| Cover letter with tone control | ✅ `pages/Letter.tsx` |
+| Cross-session progress with charts | ✅ `pages/Progress.tsx`, `components/charts.tsx` — hand-rolled SVG |
+| WCAG AA contrast on every text node | ✅ Audited at rendered size across all 7 pages; two palette tokens darkened (DESIGN §16.8) |
 | Types generated from OpenAPI (`openapi-typescript`) | 🟡 Hand-written to mirror the schema |
 
 ## 6. Not started (project deliverables)
 
 - `documentation.pdf` (the assessed written deliverable)
 - `docs/prompts.md` — every prompt in PCTF form with version history, scored on the
-  Άσκηση 5 rubric
+  Άσκηση 5 rubric. Now covers **eight** stages: the original five plus `coach_agent`,
+  `rewrite_bullet` and `cover_letter`.
 - Screenshots and demo video
-- Git repository init and first commit
+- Switching `LLM_PROVIDER=openai` to run the three measurements the harness implements
+  but cannot exercise offline: the few-shot/zero-shot prompt ablation, self-consistency,
+  and LLM-as-judge agreement.
 
 ---
 
