@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, BackgroundTasks, status
 from sqlmodel import delete, select
 
 from app.dependencies import CurrentUser, OwnedSession, PageDep, SessionDep
@@ -13,9 +13,12 @@ from app.models import (
     MatchReport,
     Question,
     Scorecard,
+    SessionStatus,
 )
 from app.rag import store
+from app.routers.documents import _ingest_in_background
 from app.schemas.session import DocumentOut, SessionCreate, SessionOut
+from app.services.profile import attach_cv_to_session
 
 router = APIRouter(prefix="/api/v1/sessions", tags=["sessions"])
 
@@ -44,13 +47,26 @@ def _to_out(sess: InterviewSession, db) -> SessionOut:
 
 
 @router.post("", response_model=SessionOut, status_code=status.HTTP_201_CREATED)
-def create_session(body: SessionCreate, user: CurrentUser, db: SessionDep) -> SessionOut:
+def create_session(
+    body: SessionCreate, user: CurrentUser, db: SessionDep, background: BackgroundTasks
+) -> SessionOut:
     sess = InterviewSession(
         user_id=user.id or 0, title=body.title, target_role=body.target_role
     )
     db.add(sess)
     db.commit()
     db.refresh(sess)
+
+    # A CV does not change per application, so start from the profile one when
+    # there is one. The session still owns its copy and can replace it.
+    if body.use_profile_cv:
+        doc = attach_cv_to_session(session_id=sess.id or 0, user_id=user.id or 0, db=db)
+        if doc is not None:
+            sess.status = SessionStatus.ingesting
+            db.add(sess)
+            db.commit()
+            db.refresh(sess)
+            background.add_task(_ingest_in_background, doc.id or 0, user.id or 0)
     return _to_out(sess, db)
 
 

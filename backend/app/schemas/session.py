@@ -8,6 +8,8 @@ from app.models import DocumentKind, DocumentSource, IngestStatus, SessionStatus
 class SessionCreate(BaseModel):
     title: str = Field(min_length=2, max_length=160)
     target_role: str = Field(default="", max_length=160)
+    # Off only when the user wants a different CV for this application.
+    use_profile_cv: bool = True
 
 
 class DocumentTextCreate(BaseModel):

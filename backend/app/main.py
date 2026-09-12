@@ -11,7 +11,15 @@ from app.config import get_settings
 from app.db import create_db_and_tables
 from app.exceptions import DomainError, domain_error_handler, validation_error_handler
 from app.middleware import RequestContextMiddleware
-from app.routers import analysis, auth, documents, health, interview, sessions
+from app.routers import (
+    analysis,
+    auth,
+    documents,
+    health,
+    interview,
+    profile,
+    sessions,
+)
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
@@ -57,6 +65,7 @@ app.add_exception_handler(RequestValidationError, validation_error_handler)
 
 app.include_router(health.router)
 app.include_router(auth.router)
+app.include_router(profile.router)
 app.include_router(sessions.router)
 app.include_router(documents.router)
 app.include_router(analysis.router)

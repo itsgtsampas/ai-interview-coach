@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useOutletContext } from "react-router-dom";
+import { Link, useNavigate, useOutletContext } from "react-router-dom";
 
 import { api } from "../api/client";
 import type { DocumentKind, DocumentOut, SessionOut } from "../api/types";
@@ -128,6 +128,17 @@ export function Upload() {
       </Head>
 
       <Row margin={<span className="label">Your CV</span>}>
+        {cv ? (
+          <p className="hint" style={{ margin: "0 0 0.7rem" }}>
+            Started from the CV on <Link to="/profile">your profile</Link>. Replacing it
+            here affects this application only.
+          </p>
+        ) : (
+          <p className="hint" style={{ margin: "0 0 0.7rem" }}>
+            Add a CV to <Link to="/profile">your profile</Link> and future sessions will
+            start from it automatically.
+          </p>
+        )}
         <FilePicker
           title="CV" doc={cv} busy={busy === "cv"}
           hint="A text-based PDF — the kind where you can select the text in a reader. Scans are rejected rather than misread."

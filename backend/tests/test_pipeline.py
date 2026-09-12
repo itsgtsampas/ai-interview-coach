@@ -437,3 +437,69 @@ def test_a_descriptive_sentence_is_preferred_over_a_list_entry():
     quotes = [best_evidence("Spring Boot", p, idf) for p in passages]
     assert all(q[2] for q in quotes), "both should carry the decisive term"
     assert len(quotes[0][0]) < 25 and len(quotes[1][0]) >= 25
+
+
+# --- profile ---------------------------------------------------------------
+
+def test_a_new_session_starts_from_the_profile_cv(auth_client, cv_bytes, jd_bytes):
+    """A CV does not change per application, so it should not be re-uploaded."""
+    r = auth_client.post("/api/v1/profile/cv",
+                         files={"file": ("mycv.pdf", cv_bytes, "application/pdf")})
+    assert r.status_code == 201, r.text
+    assert r.json()["has_cv"] and r.json()["cv_filename"] == "mycv.pdf"
+
+    sid = auth_client.post("/api/v1/sessions", json={"title": "From profile"}).json()["id"]
+    docs = auth_client.get(f"/api/v1/sessions/{sid}/documents").json()
+    cv = next(d for d in docs if d["kind"] == "cv")
+    assert cv["ingest_status"] == "ready"
+    assert cv["chunk_count"] > 0
+    assert cv["original_filename"] == "mycv.pdf"
+
+    # It is a copy: replacing it inside the session leaves the profile alone.
+    auth_client.post(f"/api/v1/sessions/{sid}/documents?kind=cv",
+                     files={"file": ("other.pdf", jd_bytes, "application/pdf")})
+    assert auth_client.get("/api/v1/profile").json()["cv_filename"] == "mycv.pdf"
+    session_cv = next(d for d in auth_client.get(f"/api/v1/sessions/{sid}/documents").json()
+                      if d["kind"] == "cv")
+    assert session_cv["original_filename"] == "other.pdf"
+
+
+def test_a_session_can_opt_out_of_the_profile_cv(auth_client, cv_bytes):
+    auth_client.post("/api/v1/profile/cv",
+                     files={"file": ("mycv.pdf", cv_bytes, "application/pdf")})
+    sid = auth_client.post("/api/v1/sessions", json={
+        "title": "Different CV", "use_profile_cv": False}).json()["id"]
+    assert auth_client.get(f"/api/v1/sessions/{sid}/documents").json() == []
+
+
+def test_profile_details_round_trip(auth_client):
+    r = auth_client.put("/api/v1/profile", json={
+        "headline": "Software Engineer", "seniority": "mid", "years_experience": 3,
+        "target_roles": "Backend Engineer", "location": "Athens, Greece",
+        "languages": "Greek (native), English (B2)",
+        "github_url": "https://github.com/example",
+        "date_of_birth": "1998-04-12", "gender": "male",
+    })
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["headline"] == "Software Engineer"
+    assert body["age"] == 28  # derived, not stored
+    assert auth_client.get("/api/v1/profile").json()["years_experience"] == 3
+
+
+def test_demographics_never_reach_a_prompt(auth_client):
+    """Age and gender are protected characteristics that say nothing about
+    whether a CV meets a requirement. They are stored, and excluded by
+    construction from the only profile text the pipeline can see."""
+    from app.models import UserProfile
+    from datetime import date
+
+    profile = UserProfile(
+        user_id=1, headline="Software Engineer", years_experience=3,
+        date_of_birth=date(1990, 1, 1), gender="female", nationality="Greek",
+        phone="+30 690 000 0000",
+    )
+    context = profile.profile_context()
+    assert "Software Engineer" in context
+    for leaked in ("1990", "female", "Greek", "690"):
+        assert leaked not in context, f"{leaked!r} reached the model context"

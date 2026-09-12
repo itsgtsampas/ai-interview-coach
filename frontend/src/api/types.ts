@@ -134,3 +134,35 @@ export interface CoachResponse {
   answer: string;
   steps: CoachStep[];
 }
+
+export type Seniority = "intern" | "junior" | "mid" | "senior" | "lead" | "principal";
+
+export interface ProfileUpdate {
+  headline: string;
+  seniority: Seniority | null;
+  years_experience: number | null;
+  target_roles: string;
+  location: string;
+  languages: string;
+  summary: string;
+  linkedin_url: string;
+  github_url: string;
+  portfolio_url: string;
+  phone: string;
+  /** Europass fields. Stored, shown back, and never sent to a model. */
+  date_of_birth: string | null;
+  gender: string;
+  nationality: string;
+}
+
+export interface ProfileOut extends ProfileUpdate {
+  id: number;
+  full_name: string;
+  email: string;
+  age: number | null;
+  has_cv: boolean;
+  cv_filename: string;
+  cv_page_count: number;
+  cv_uploaded_at: string | null;
+  updated_at: string;
+}

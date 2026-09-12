@@ -6,23 +6,34 @@ import {
 import { api } from "./api/client";
 import type { SessionOut } from "./api/types";
 import { Rail } from "./components/Rail";
+import { TopBar } from "./components/TopBar";
 import { Spinner } from "./components/bits";
 import { AuthProvider, useAuth } from "./lib/auth";
 import { Coach } from "./pages/Coach";
 import { Dashboard } from "./pages/Dashboard";
+import { Profile } from "./pages/Profile";
 import { Report } from "./pages/Report";
 import { Room } from "./pages/Room";
 import { ScorecardPage } from "./pages/ScorecardPage";
 import { SignIn } from "./pages/SignIn";
 import { Upload } from "./pages/Upload";
 
-function Shell({ session, refresh }: { session: SessionOut | null; refresh: () => Promise<void> }) {
+function Shell({
+  session, refresh, withRail = true,
+}: {
+  session: SessionOut | null;
+  refresh: () => Promise<void>;
+  withRail?: boolean;
+}) {
   return (
-    <div className="shell">
-      <Rail session={session} />
-      <main>
-        <Outlet context={{ session, refresh }} />
-      </main>
+    <div className="app">
+      <TopBar />
+      <div className={withRail ? "shell" : "shell shell--plain"}>
+        {withRail ? <Rail session={session} /> : null}
+        <main>
+          <Outlet context={{ session, refresh }} />
+        </main>
+      </div>
     </div>
   );
 }
@@ -61,8 +72,9 @@ function Routing() {
           : user ? <Navigate to="/" replace /> : <SignIn />}
       />
       <Route element={<Protected />}>
-        <Route element={<Shell session={null} refresh={async () => {}} />}>
+        <Route element={<Shell session={null} refresh={async () => {}} withRail={false} />}>
           <Route index element={<Dashboard />} />
+          <Route path="/profile" element={<Profile />} />
         </Route>
         <Route path="/session/:id" element={<SessionShell />}>
           <Route index element={<Navigate to="report" replace />} />

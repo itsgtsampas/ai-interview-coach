@@ -6,6 +6,7 @@ from app.models.document import (
     IngestStatus,
 )
 from app.models.interview import Answer, Evaluation, Question, QuestionCategory, Scorecard
+from app.models.profile import Seniority, UserProfile
 from app.models.session import InterviewSession, SessionStatus
 from app.models.telemetry import LLMCall
 from app.models.user import User
@@ -24,6 +25,8 @@ __all__ = [
     "Question",
     "QuestionCategory",
     "Scorecard",
+    "Seniority",
     "SessionStatus",
+    "UserProfile",
     "User",
 ]

@@ -168,6 +168,7 @@ export function Room() {
               className="btn btn--ghost btn--sm"
               onClick={() => setIndex(i)}
               aria-current={i === index}
+              title={q.text}
               style={i === index
                 ? { borderColor: "var(--ink)", background: "var(--paper-3)" }
                 : q.answered ? { color: "var(--strong)", borderColor: "var(--strong)" } : undefined}
@@ -176,6 +177,29 @@ export function Room() {
             </button>
           ))}
         </div>
+
+        {/* Numbered buttons alone give no sense of what is coming. The list
+            shows the whole set so the candidate can choose what to work on
+            rather than being marched through it. */}
+        <details className="disclose">
+          <summary>All {questions.length} questions</summary>
+          <ol className="qlist">
+            {questions.map((q, i) => (
+              <li key={q.id} className="qlist__item" data-current={i === index}>
+                <button className="qlist__btn" onClick={() => setIndex(i)}>
+                  <span className="qlist__n">{i + 1}</span>
+                  <span className="qlist__text">{q.text}</span>
+                </button>
+                <span className="qlist__tags">
+                  <span className="label">{q.category}</span>
+                  {q.answered ? (
+                    <span className="verdict" data-v="strong">Answered</span>
+                  ) : null}
+                </span>
+              </li>
+            ))}
+          </ol>
+        </details>
       </Head>
 
       {current ? (

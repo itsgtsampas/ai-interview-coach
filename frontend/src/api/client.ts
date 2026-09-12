@@ -1,6 +1,6 @@
 import type {
   Answer, CoachResponse, DocumentKind, DocumentOut, Evaluation,
-  MatchReport, Question, Scorecard, SessionOut, User,
+  MatchReport, ProfileOut, ProfileUpdate, Question, Scorecard, SessionOut, User,
 } from "./types";
 
 const TOKEN_KEY = "cvcoach.token";
@@ -74,12 +74,22 @@ export const api = {
 
   me: () => request<User>("/auth/me"),
 
+  getProfile: () => request<ProfileOut>("/profile"),
+  updateProfile: (body: ProfileUpdate) =>
+    request<ProfileOut>("/profile", { method: "PUT", body: JSON.stringify(body) }),
+  uploadProfileCv: (file: File) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return request<ProfileOut>("/profile/cv", { method: "POST", body: fd });
+  },
+  deleteProfileCv: () => request<ProfileOut>("/profile/cv", { method: "DELETE" }),
+
   listSessions: () => request<SessionOut[]>("/sessions"),
   getSession: (id: number) => request<SessionOut>(`/sessions/${id}`),
-  createSession: (title: string, target_role: string) =>
+  createSession: (title: string, target_role: string, use_profile_cv = true) =>
     request<SessionOut>("/sessions", {
       method: "POST",
-      body: JSON.stringify({ title, target_role }),
+      body: JSON.stringify({ title, target_role, use_profile_cv }),
     }),
   deleteSession: (id: number) => request<void>(`/sessions/${id}`, { method: "DELETE" }),
 

@@ -3,8 +3,6 @@ import { Link, NavLink, useLocation, useParams } from "react-router-dom";
 
 import { api } from "../api/client";
 import type { SessionOut } from "../api/types";
-import { useAuth } from "../lib/auth";
-
 /** The five stages are a real sequence — documents feed the analysis, the
  *  analysis feeds the questions, the answers feed the scorecard — so numbering
  *  them encodes the dependency rather than decorating the list. */
@@ -95,7 +93,6 @@ function SessionSwitcher({ currentId }: { currentId: number }) {
 }
 
 export function Rail({ session }: { session: SessionOut | null }) {
-  const { signOut, user } = useAuth();
   const { id } = useParams();
   // useLocation rather than window.location: the rail must re-render when the
   // route changes, and reading the global would not subscribe it to that.
@@ -103,15 +100,6 @@ export function Rail({ session }: { session: SessionOut | null }) {
 
   return (
     <nav className="rail" aria-label="Main">
-      <Link to="/" className="brand">
-        <div className="brand__mark">
-          Interview
-          <br />
-          Coach
-        </div>
-        <div className="brand__sub label">Evidence-first prep</div>
-      </Link>
-
       {id ? (
         <div className="rail__ctx">
           <Link to="/" className="rail__back label">← All sessions</Link>
@@ -150,11 +138,6 @@ export function Rail({ session }: { session: SessionOut | null }) {
         </ol>
       ) : null}
 
-      <div className="rail__foot">
-        {!id ? <Link to="/" className="label rail__back">All sessions</Link> : null}
-        {user ? <span className="label">{user.email}</span> : null}
-        <button className="btn btn--link" onClick={signOut}>Sign out</button>
-      </div>
     </nav>
   );
 }
