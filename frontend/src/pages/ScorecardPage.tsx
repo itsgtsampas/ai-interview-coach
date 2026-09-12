@@ -44,7 +44,7 @@ export function ScorecardPage() {
   if (missing) {
     return (
       <div className="sheet">
-        <Head margin={<span className="label">Stage 3</span>}>
+        <Head margin={<span className="label">Stage 4</span>}>
           <h1 className="display h1">Scorecard</h1>
           <p className="prose">
             The scorecard combines your CV match with how you actually answered. Answer at
@@ -68,7 +68,7 @@ export function ScorecardPage() {
 
   return (
     <div className="sheet">
-      <Head margin={<span className="label">Stage 3</span>}>
+      <Head margin={<span className="label">Stage 4</span>}>
         <h1 className="display h1">Scorecard</h1>
         <Gauge value={card.readiness_score} />
         <p className="label" style={{ marginTop: "0.2rem" }}>{card.readiness_band}</p>

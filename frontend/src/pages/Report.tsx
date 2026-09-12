@@ -44,7 +44,7 @@ export function Report() {
   if (missing) {
     return (
       <div className="sheet">
-        <Head margin={<span className="label">Stage 1</span>}>
+        <Head margin={<span className="label">Stage 2</span>}>
           <h1 className="display h1">Gap analysis</h1>
           <p className="prose">No analysis has been run for this session yet.</p>
           <ErrorBox error={error} />
@@ -70,7 +70,7 @@ export function Report() {
 
   return (
     <div className="sheet">
-      <Head margin={<span className="label">Stage 1</span>}>
+      <Head margin={<span className="label">Stage 2</span>}>
         <h1 className="display h1">Gap analysis</h1>
         <Gauge value={report.overall_score} />
         <p className="label" style={{ marginTop: "0.2rem" }}>{report.verdict}</p>

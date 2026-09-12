@@ -135,7 +135,7 @@ export function Room() {
   if (questions.length === 0) {
     return (
       <div className="sheet">
-        <Head margin={<span className="label">Stage 2</span>}>
+        <Head margin={<span className="label">Stage 3</span>}>
           <h1 className="display h1">Practice</h1>
           <p className="prose">
             Eight questions, drawn from your gap analysis. The requirements with no
@@ -155,7 +155,7 @@ export function Room() {
       <Head
         margin={
           <>
-            <span className="label">Stage 2</span>
+            <span className="label">Stage 3</span>
             <span className="label">{progress} of {questions.length} answered</span>
           </>
         }

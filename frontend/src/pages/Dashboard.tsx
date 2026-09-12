@@ -19,7 +19,20 @@ export function Dashboard() {
   const [title, setTitle] = useState("");
   const [role, setRole] = useState("");
   const [busy, setBusy] = useState(false);
+  const [confirming, setConfirming] = useState<number | null>(null);
   const navigate = useNavigate();
+
+  async function remove(id: number) {
+    setError(null);
+    try {
+      await api.deleteSession(id);
+      setSessions((all) => (all ?? []).filter((s) => s.id !== id));
+    } catch (err) {
+      setError(err);
+    } finally {
+      setConfirming(null);
+    }
+  }
 
   useEffect(() => {
     api.listSessions().then(setSessions).catch(setError);
@@ -82,23 +95,42 @@ export function Dashboard() {
         ) : (
           <div className="cards">
             {sessions.map((s) => (
-              <Link key={s.id} to={`/session/${s.id}/report`} className="card">
+              <div key={s.id} className="card">
                 <div className="between">
                   <span className="label">{new Date(s.created_at).toLocaleDateString()}</span>
                   <Chip tone={s.readiness_score != null ? toneForScore(s.readiness_score) : "neutral"}>
                     {statusLabel(s)}
                   </Chip>
                 </div>
-                <h3 className="display h3">{s.title}</h3>
-                {s.target_role ? <p className="hint" style={{ margin: 0 }}>{s.target_role}</p> : null}
-                {s.readiness_score != null ? (
-                  <p className="num" style={{ fontSize: "1.6rem", margin: 0,
-                       color: `var(--${toneForScore(s.readiness_score)})` }}>
-                    {s.readiness_score}
-                    <span className="gauge__d"> /100 ready</span>
-                  </p>
-                ) : null}
-              </Link>
+                <Link to={`/session/${s.id}/report`} className="card__body">
+                  <h3 className="display h3">{s.title}</h3>
+                  {s.target_role ? <p className="hint" style={{ margin: 0 }}>{s.target_role}</p> : null}
+                  {s.readiness_score != null ? (
+                    <p className="num" style={{ fontSize: "1.6rem", margin: "0.4rem 0 0",
+                         color: `var(--${toneForScore(s.readiness_score)})` }}>
+                      {s.readiness_score}
+                      <span className="gauge__d"> /100 ready</span>
+                    </p>
+                  ) : null}
+                </Link>
+
+                {/* Deleting removes the uploaded CV, its vectors and every
+                    derived result. A CV is personal data, so this has to be
+                    reachable — and has to confirm first. */}
+                {confirming === s.id ? (
+                  <div className="split card__confirm">
+                    <span className="hint">Delete this session and its documents?</span>
+                    <button className="btn btn--sm" onClick={() => remove(s.id)}>Delete</button>
+                    <button className="btn btn--ghost btn--sm"
+                            onClick={() => setConfirming(null)}>Keep</button>
+                  </div>
+                ) : (
+                  <button className="btn btn--link card__delete"
+                          onClick={() => setConfirming(s.id)}>
+                    Delete
+                  </button>
+                )}
+              </div>
             ))}
           </div>
         )}

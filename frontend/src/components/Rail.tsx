@@ -1,39 +1,105 @@
-import { Link, NavLink, useParams } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, NavLink, useLocation, useParams } from "react-router-dom";
 
-import { useAuth } from "../lib/auth";
+import { api } from "../api/client";
 import type { SessionOut } from "../api/types";
+import { useAuth } from "../lib/auth";
 
-/** The four stages are a real sequence — analysis feeds questions, questions
- *  feed answers, answers feed the scorecard — so numbering them encodes the
- *  dependency rather than decorating the list. */
+/** The five stages are a real sequence — documents feed the analysis, the
+ *  analysis feeds the questions, the answers feed the scorecard — so numbering
+ *  them encodes the dependency rather than decorating the list. */
 const STAGES = [
-  { n: 1, to: "report", label: "Gap analysis" },
-  { n: 2, to: "room", label: "Practice" },
-  { n: 3, to: "scorecard", label: "Scorecard" },
-  { n: 4, to: "coach", label: "Coach" },
+  { n: 1, to: "upload", label: "Documents" },
+  { n: 2, to: "report", label: "Gap analysis" },
+  { n: 3, to: "room", label: "Practice" },
+  { n: 4, to: "scorecard", label: "Scorecard" },
+  { n: 5, to: "coach", label: "Coach" },
 ] as const;
 
-function stageState(stage: (typeof STAGES)[number], session: SessionOut | null, active: string) {
-  if (active === stage.to) return "active";
-  if (!session) return "todo";
-  if (stage.to === "report") return session.has_analysis ? "done" : "todo";
-  if (stage.to === "room") return session.answered_count > 0 ? "done" : "todo";
-  if (stage.to === "scorecard") return session.readiness_score != null ? "done" : "todo";
-  return "todo";
+type Stage = (typeof STAGES)[number];
+
+function bothDocumentsReady(s: SessionOut): boolean {
+  const ready = s.documents.filter((d) => d.ingest_status === "ready");
+  return new Set(ready.map((d) => d.kind)).size === 2;
 }
 
-function stageEnabled(stage: (typeof STAGES)[number], session: SessionOut | null) {
-  if (!session) return false;
-  if (stage.to === "report") return true;
-  if (stage.to === "room") return session.has_analysis;
-  if (stage.to === "scorecard") return session.answered_count > 0;
-  return session.has_analysis;
+function isDone(stage: Stage, s: SessionOut | null): boolean {
+  if (!s) return false;
+  if (stage.to === "upload") return bothDocumentsReady(s);
+  if (stage.to === "report") return s.has_analysis;
+  if (stage.to === "room") return s.question_count > 0 && s.answered_count === s.question_count;
+  if (stage.to === "scorecard") return s.readiness_score != null;
+  return false;
+}
+
+/** Why a stage cannot be opened yet — shown to the user rather than left as a
+ *  dead link with no explanation. */
+function blockedBecause(stage: Stage, s: SessionOut | null): string | null {
+  if (!s) return "Loading…";
+  if (stage.to === "upload") return null;
+  if (!bothDocumentsReady(s)) return "Add your CV and the job description first";
+  if (stage.to === "report") return null;
+  if (!s.has_analysis) return "Run the gap analysis first";
+  if (stage.to === "scorecard" && s.answered_count === 0) return "Answer a question first";
+  return null;
+}
+
+/** A short progress note, so the rail carries state and not just labels. */
+function progress(stage: Stage, s: SessionOut | null): string | null {
+  if (!s) return null;
+  if (stage.to === "upload") {
+    const ready = s.documents.filter((d) => d.ingest_status === "ready").length;
+    return ready === 2 ? "CV + job description" : `${ready} of 2`;
+  }
+  if (stage.to === "room" && s.question_count > 0) {
+    return `${s.answered_count} of ${s.question_count} answered`;
+  }
+  if (stage.to === "scorecard" && s.readiness_score != null) {
+    return `${s.readiness_score}/100 ready`;
+  }
+  return null;
+}
+
+function SessionSwitcher({ currentId }: { currentId: number }) {
+  const [sessions, setSessions] = useState<SessionOut[] | null>(null);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (open && sessions === null) api.listSessions().then(setSessions).catch(() => setSessions([]));
+  }, [open, sessions]);
+
+  const others = (sessions ?? []).filter((s) => s.id !== currentId);
+
+  return (
+    <details className="disclose switcher" open={open}
+             onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
+      <summary>Switch session</summary>
+      {sessions === null ? (
+        <p className="hint switcher__empty">Loading…</p>
+      ) : others.length === 0 ? (
+        <p className="hint switcher__empty">This is your only session.</p>
+      ) : (
+        <ul className="switcher__list">
+          {others.map((s) => (
+            <li key={s.id}>
+              <Link to={`/session/${s.id}/report`} className="switcher__link">
+                {s.title}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+      <Link to="/" className="switcher__new">+ New session</Link>
+    </details>
+  );
 }
 
 export function Rail({ session }: { session: SessionOut | null }) {
   const { signOut, user } = useAuth();
-  const params = useParams();
-  const active = window.location.pathname.split("/").pop() ?? "";
+  const { id } = useParams();
+  // useLocation rather than window.location: the rail must re-render when the
+  // route changes, and reading the global would not subscribe it to that.
+  const active = useLocation().pathname.split("/").pop() ?? "";
 
   return (
     <nav className="rail" aria-label="Main">
@@ -46,23 +112,38 @@ export function Rail({ session }: { session: SessionOut | null }) {
         <div className="brand__sub label">Evidence-first prep</div>
       </Link>
 
-      {params.id ? (
+      {id ? (
+        <div className="rail__ctx">
+          <Link to="/" className="rail__back label">← All sessions</Link>
+          <h2 className="rail__title">{session?.title ?? "…"}</h2>
+          {session?.target_role ? (
+            <p className="rail__role">{session.target_role}</p>
+          ) : null}
+          <SessionSwitcher currentId={Number(id)} />
+        </div>
+      ) : null}
+
+      {id ? (
         <ol className="stepper">
           {STAGES.map((stage) => {
-            const enabled = stageEnabled(stage, session);
+            const blocked = blockedBecause(stage, session);
+            const note = progress(stage, session);
+            const state = active === stage.to ? "active" : isDone(stage, session) ? "done" : "todo";
             return (
-              <li
-                key={stage.to}
-                className="step"
-                data-state={stageState(stage, session, active)}
-                aria-disabled={!enabled}
-              >
-                <span className="step__n" aria-hidden="true">
-                  {stage.n}
-                </span>
-                <NavLink to={`/session/${params.id}/${stage.to}`} className="step__link">
+              <li key={stage.to} className="step" data-state={state} aria-disabled={!!blocked}>
+                <span className="step__n" aria-hidden="true">{stage.n}</span>
+                <NavLink
+                  to={`/session/${id}/${stage.to}`}
+                  className="step__link"
+                  title={blocked ?? undefined}
+                  aria-current={active === stage.to ? "page" : undefined}
+                >
                   {stage.label}
                 </NavLink>
+                {note && !blocked ? <span className="step__meta">{note}</span> : null}
+                {blocked && active !== stage.to ? (
+                  <span className="step__meta step__meta--blocked">{blocked}</span>
+                ) : null}
               </li>
             );
           })}
@@ -70,13 +151,9 @@ export function Rail({ session }: { session: SessionOut | null }) {
       ) : null}
 
       <div className="rail__foot">
-        <Link to="/" className="label" style={{ textDecoration: "none" }}>
-          All sessions
-        </Link>
+        {!id ? <Link to="/" className="label rail__back">All sessions</Link> : null}
         {user ? <span className="label">{user.email}</span> : null}
-        <button className="btn btn--link" onClick={signOut}>
-          Sign out
-        </button>
+        <button className="btn btn--link" onClick={signOut}>Sign out</button>
       </div>
     </nav>
   );
