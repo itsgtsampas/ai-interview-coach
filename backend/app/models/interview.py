@@ -81,3 +81,19 @@ class Scorecard(SQLModel, table=True):
     action_items_json: str = "[]"
     prompt_version: str = ""
     created_at: datetime = Field(default_factory=utcnow)
+
+    @property
+    def competencies(self) -> dict[str, float]:
+        return json.loads(self.competencies_json)
+
+    @property
+    def strengths(self) -> list[str]:
+        return json.loads(self.strengths_json)
+
+    @property
+    def gaps(self) -> list[str]:
+        return json.loads(self.gaps_json)
+
+    @property
+    def action_items(self) -> list[dict]:
+        return json.loads(self.action_items_json)

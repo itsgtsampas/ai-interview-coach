@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlmodel import select
 
@@ -8,13 +8,15 @@ from app.dependencies import CurrentUser, SessionDep
 from app.exceptions import AlreadyExists, DomainError
 from app.models import User
 from app.schemas.auth import RegisterRequest, TokenOut, UserOut
+from app.ratelimit import AUTH_LIMIT, REGISTER_LIMIT, limit
 from app.security import create_access_token, hash_password, verify_password
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
 
 @router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
-def register(body: RegisterRequest, db: SessionDep) -> User:
+@limit(REGISTER_LIMIT)
+def register(request: Request, body: RegisterRequest, db: SessionDep) -> User:
     if db.exec(select(User).where(User.email == body.email)).first():
         raise AlreadyExists("An account with that email already exists.")
     user = User(
@@ -29,9 +31,14 @@ def register(body: RegisterRequest, db: SessionDep) -> User:
 
 
 @router.post("/login", response_model=TokenOut)
+@limit(AUTH_LIMIT)
 def login(
-    form: Annotated[OAuth2PasswordRequestForm, Depends()], db: SessionDep
+    request: Request,
+    form: Annotated[OAuth2PasswordRequestForm, Depends()],
+    db: SessionDep,
 ) -> TokenOut:
+    # Unauthenticated, so the limiter keys on the client address here. That is
+    # the whole point: this is the endpoint someone walks a password list at.
     user = db.exec(select(User).where(User.email == form.username)).first()
     if user is None or not verify_password(form.password, user.hashed_password):
         raise DomainError("Incorrect email or password.")

@@ -1,8 +1,9 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 
 from app.dependencies import OwnedSession, SessionDep
 from app.exceptions import NotFound
 from app.models.analysis import EvidenceStatus
+from app.ratelimit import GENERATE_LIMIT, limit
 from app.schemas.analysis import MatchItemOut, MatchReportOut
 from app.services.analysis import get_report, run_analysis
 
@@ -43,7 +44,8 @@ def _serialise(report, items) -> MatchReportOut:
 
 
 @router.post("/{session_id}/analysis", response_model=MatchReportOut)
-def create_analysis(sess: OwnedSession, db: SessionDep) -> MatchReportOut:
+@limit(GENERATE_LIMIT)
+def create_analysis(request: Request, sess: OwnedSession, db: SessionDep) -> MatchReportOut:
     report = run_analysis(sess, db)
     _, items = get_report(sess.id or 0, db)
     return _serialise(report, items)

@@ -2,7 +2,7 @@
 
 from typing import Annotated
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlmodel import Session, select
 
@@ -16,7 +16,9 @@ SessionDep = Annotated[Session, Depends(get_session)]
 
 
 def get_current_user(
-    token: Annotated[str, Depends(oauth2_scheme)], session: SessionDep
+    request: Request,
+    token: Annotated[str, Depends(oauth2_scheme)],
+    session: SessionDep,
 ) -> User:
     creds_exc = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -29,6 +31,9 @@ def get_current_user(
     user = session.exec(select(User).where(User.email == email)).first()
     if user is None or not user.is_active:
         raise creds_exc
+    # Lets the rate limiter key on the account rather than the address, so one
+    # tenant cannot spend another's budget and shared NAT is not a shared ceiling.
+    request.state.user_id = user.id
     return user
 
 

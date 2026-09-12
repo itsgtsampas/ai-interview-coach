@@ -6,6 +6,7 @@ and OPENAI_API_KEY to switch; no calling code changes.
 """
 
 import json
+from collections.abc import Iterator
 
 import httpx
 from pydantic import BaseModel
@@ -73,6 +74,55 @@ class OpenAIProvider:
             prompt_tokens=usage.get("prompt_tokens", 0),
             completion_tokens=usage.get("completion_tokens", 0),
         )
+
+    def stream_text(
+        self,
+        prompt: RenderedPrompt,
+        *,
+        model: str,
+        temperature: float,
+    ) -> Iterator[str]:
+        """Real token streaming, passed straight through to the caller.
+
+        OpenAI speaks SSE on the wire too, so this parses one SSE stream and
+        re-frames it as ours. `[DONE]` is the sentinel that ends it; a line that
+        is not valid JSON after the `data: ` prefix is skipped rather than
+        failing the response, because a half-written frame at a chunk boundary
+        is normal.
+        """
+        body = {
+            "model": model,
+            "temperature": temperature,
+            "stream": True,
+            "messages": [
+                {"role": "system", "content": prompt.system},
+                {"role": "user", "content": prompt.user},
+            ],
+        }
+        try:
+            with httpx.stream(
+                "POST",
+                _API,
+                json=body,
+                headers={"Authorization": f"Bearer {self._key}"},
+                timeout=120.0,
+            ) as response:
+                response.raise_for_status()
+                for line in response.iter_lines():
+                    if not line.startswith("data: "):
+                        continue
+                    data = line.removeprefix("data: ").strip()
+                    if data == "[DONE]":
+                        return
+                    try:
+                        delta = json.loads(data)["choices"][0]["delta"]
+                    except (json.JSONDecodeError, KeyError, IndexError):
+                        continue
+                    piece = delta.get("content")
+                    if piece:
+                        yield piece
+        except httpx.HTTPError as exc:
+            raise ProviderUnavailable(f"OpenAI stream failed: {exc}") from exc
 
     def plan_step(
         self, prompt: RenderedPrompt, tools: list[ToolSpec], history: list[AgentStep]

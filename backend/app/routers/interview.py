@@ -1,7 +1,15 @@
+import json
+import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Query, status
-from sqlmodel import select
+from fastapi import APIRouter, Query, Request, status
+from fastapi.responses import StreamingResponse
+from sqlmodel import Session, select
+
+from app import sse
+from app.db import engine
+from app.exceptions import DomainError
+from app.ratelimit import GENERATE_LIMIT, limit
 
 from app.agents.coach import ask
 from app.dependencies import CurrentUser, OwnedSession, SessionDep
@@ -58,7 +66,9 @@ def _evaluation_out(e: Evaluation) -> EvaluationOut:
 
 @router.post("/sessions/{session_id}/questions", response_model=list[QuestionOut],
              status_code=status.HTTP_201_CREATED)
+@limit(GENERATE_LIMIT)
 def create_questions(
+    request: Request,
     sess: OwnedSession,
     db: SessionDep,
     technical: Annotated[int, Query(ge=1, le=10)] = 5,
@@ -75,8 +85,9 @@ def read_questions(sess: OwnedSession, db: SessionDep) -> list[QuestionOut]:
 
 @router.post("/questions/{question_id}/answers", response_model=AnswerOut,
              status_code=status.HTTP_201_CREATED)
+@limit(GENERATE_LIMIT)
 def submit_answer(
-    question_id: int, body: AnswerCreate, user: CurrentUser, db: SessionDep
+    request: Request, question_id: int, body: AnswerCreate, user: CurrentUser, db: SessionDep
 ) -> AnswerOut:
     question = db.get(Question, question_id)
     if question is None:
@@ -99,6 +110,70 @@ def submit_answer(
         text=answer.text,
         duration_seconds=answer.duration_seconds,
         evaluation=_evaluation_out(evaluation),
+    )
+
+
+@router.post("/questions/{question_id}/answers/stream")
+@limit(GENERATE_LIMIT)
+def submit_answer_streaming(
+    request: Request, question_id: int, body: AnswerCreate, user: CurrentUser, db: SessionDep
+) -> StreamingResponse:
+    """Score an answer, reporting each stage as it completes.
+
+    Evaluation returns a structured object, not prose, so there are no tokens to
+    stream — a half-parsed JSON object is not something the UI can render. What
+    the user gets instead is honest progress: the four stages the pipeline
+    actually runs, each announced when it starts, then the finished evaluation.
+    That removes the dead ten-second spinner without pretending to stream
+    something that is not streaming.
+
+    Ownership is checked here, on the request, so an unauthorised caller gets a
+    404 with a status line rather than an error event inside a 200 stream.
+    """
+    question = db.get(Question, question_id)
+    if question is None:
+        raise NotFound("Question not found.")
+    sess = db.get(InterviewSession, question.session_id)
+    if sess is None or sess.user_id != user.id:
+        raise NotFound("Question not found.")
+    session_id = sess.id or 0
+    text, duration = body.text, body.duration_seconds
+
+    def events():
+        # A fresh session: the injected one closes when this function returns,
+        # which happens before the generator is consumed.
+        with Session(engine) as own:
+            try:
+                yield sse.stage("recording", "Saving your answer")
+                q = own.get(Question, question_id)
+                answer = Answer(
+                    question_id=question_id, text=text, duration_seconds=duration
+                )
+                own.add(answer)
+                own.commit()
+                own.refresh(answer)
+
+                yield sse.stage("rubric", "Choosing the rubric for this question")
+                yield sse.stage("scoring", "Scoring against each criterion")
+                evaluation = evaluate(answer, q, own, session_id)
+
+                yield sse.stage("writing", "Writing the feedback")
+                payload = AnswerOut(
+                    id=answer.id or 0,
+                    question_id=question_id,
+                    text=answer.text,
+                    duration_seconds=answer.duration_seconds,
+                    evaluation=_evaluation_out(evaluation),
+                )
+                yield sse.done(json.loads(payload.model_dump_json()))
+            except DomainError as exc:
+                yield sse.error(exc.code, exc.message, exc.details)
+            except Exception:  # noqa: BLE001
+                logging.getLogger("cvcoach.interview").exception("answer stream failed")
+                yield sse.error("stream_failed", "Scoring your answer failed part-way.")
+
+    return StreamingResponse(
+        events(), media_type="text/event-stream", headers=sse.SSE_HEADERS
     )
 
 
@@ -143,7 +218,8 @@ def _scorecard_out(card) -> ScorecardOut:
 
 @router.post("/sessions/{session_id}/scorecard", response_model=ScorecardOut,
              status_code=status.HTTP_201_CREATED)
-def create_scorecard(sess: OwnedSession, db: SessionDep) -> ScorecardOut:
+@limit(GENERATE_LIMIT)
+def create_scorecard(request: Request, sess: OwnedSession, db: SessionDep) -> ScorecardOut:
     return _scorecard_out(build(sess, db))
 
 
@@ -156,7 +232,8 @@ def read_scorecard(sess: OwnedSession, db: SessionDep) -> ScorecardOut:
 
 
 @router.post("/sessions/{session_id}/coach", response_model=CoachResponse)
-def coach(sess: OwnedSession, body: CoachRequest, db: SessionDep) -> CoachResponse:
+@limit(GENERATE_LIMIT)
+def coach(request: Request, sess: OwnedSession, body: CoachRequest, db: SessionDep) -> CoachResponse:
     result = ask(body.message, user_id=sess.user_id, session_id=sess.id or 0, db=db)
     return CoachResponse(
         answer=result.answer,

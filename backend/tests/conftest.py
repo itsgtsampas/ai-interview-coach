@@ -15,6 +15,10 @@ os.environ["CHROMA_DIR"] = str(_TMP / "chroma")
 os.environ["SECRET_KEY"] = "test-secret-key-not-used-in-production"
 os.environ["LLM_PROVIDER"] = "stub"
 os.environ["EMBEDDING_PROVIDER"] = "stub"
+# The suite makes dozens of logins and uploads a second, which is exactly the
+# traffic the ceilings exist to stop. test_ratelimit.py re-enables the limiter
+# against its own app instance rather than leaving it on for everything.
+os.environ["DISABLE_RATE_LIMITS"] = "true"
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402

@@ -8,6 +8,7 @@ application talks to a provider directly.
 import json
 import logging
 import time
+from collections.abc import Iterator
 from typing import TypeVar
 
 from pydantic import BaseModel, ValidationError
@@ -17,7 +18,7 @@ from app.exceptions import LLMOutputError
 from app.llm.base import RenderedPrompt
 from app.llm.cache import completion_cache, content_hash
 from app.llm.provider import get_llm_provider
-from app.llm.tokens import estimate_cost
+from app.llm.tokens import estimate_cost, estimate_tokens
 from app.models import LLMCall
 
 logger = logging.getLogger("cvcoach.llm")
@@ -106,6 +107,59 @@ def complete_structured(
             cost_usd=estimate_cost(model, prompt_tokens, completion_tokens),
             latency_ms=round(elapsed, 2),
             cache_hit=cache_hit,
+            status="error" if error else "ok",
+            error=error,
+        ))
+        db.commit()
+
+
+def complete_stream(
+    prompt: RenderedPrompt,
+    *,
+    db: Session,
+    session_id: int | None,
+    model: str,
+    temperature: float = 0.4,
+) -> Iterator[str]:
+    """Streaming counterpart of `complete_structured`.
+
+    Same contract as the rest of this module: the provider is reached through
+    here and nowhere else, and a telemetry row is written whatever happens. The
+    difference is that the text is handed back in pieces as it is produced, and
+    the caller is expected to be inside a `StreamingResponse`.
+
+    Not cached. A cached stream would replay instantly, which is indistinguishable
+    from the non-streaming path and would make the cost of this stage invisible
+    in the telemetry — the two reasons to look at it at all.
+    """
+    provider = get_llm_provider()
+    started = time.perf_counter()
+    parts: list[str] = []
+    error: str | None = None
+
+    try:
+        for piece in provider.stream_text(prompt, model=model, temperature=temperature):
+            parts.append(piece)
+            yield piece
+    except Exception as exc:  # noqa: BLE001 - recorded, re-raised
+        error = str(exc)[:500]
+        raise
+    finally:
+        text = "".join(parts)
+        elapsed = (time.perf_counter() - started) * 1000
+        completion_tokens = estimate_tokens(text)
+        prompt_tokens = estimate_tokens(prompt.system + prompt.user)
+        db.add(LLMCall(
+            session_id=session_id,
+            stage=prompt.stage,
+            provider=provider.name,
+            model=model,
+            prompt_version=prompt.version,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            cost_usd=estimate_cost(model, prompt_tokens, completion_tokens),
+            latency_ms=round(elapsed, 2),
+            cache_hit=False,
             status="error" if error else "ok",
             error=error,
         ))

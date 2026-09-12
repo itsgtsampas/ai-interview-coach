@@ -11,13 +11,17 @@ from app.config import get_settings
 from app.db import create_db_and_tables
 from app.exceptions import DomainError, domain_error_handler, validation_error_handler
 from app.middleware import RequestContextMiddleware
+from app.ratelimit import install as install_rate_limits
 from app.routers import (
     analysis,
     auth,
+    coaching,
     documents,
+    export,
     health,
     interview,
     profile,
+    progress,
     sessions,
 )
 
@@ -62,6 +66,7 @@ app.add_middleware(
 
 app.add_exception_handler(DomainError, domain_error_handler)
 app.add_exception_handler(RequestValidationError, validation_error_handler)
+install_rate_limits(app)
 
 app.include_router(health.router)
 app.include_router(auth.router)
@@ -70,3 +75,6 @@ app.include_router(sessions.router)
 app.include_router(documents.router)
 app.include_router(analysis.router)
 app.include_router(interview.router)
+app.include_router(coaching.router)
+app.include_router(progress.router)
+app.include_router(export.router)

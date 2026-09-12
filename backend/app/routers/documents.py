@@ -1,11 +1,12 @@
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, File, Query, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, File, Query, Request, UploadFile, status
 from sqlmodel import Session, select
 
 from app.db import engine
 from app.dependencies import CurrentUser, OwnedSession, SessionDep
 from app.models import Document, DocumentKind, SessionStatus
+from app.ratelimit import UPLOAD_LIMIT, limit
 from app.schemas.session import DocumentOut, DocumentTextCreate
 from app.services.ingestion import ingest_document, save_text, save_upload
 
@@ -23,7 +24,9 @@ def _ingest_in_background(document_id: int, user_id: int) -> None:
     response_model=DocumentOut,
     status_code=status.HTTP_202_ACCEPTED,
 )
+@limit(UPLOAD_LIMIT)
 async def upload_document(
+    request: Request,
     sess: OwnedSession,
     user: CurrentUser,
     db: SessionDep,
@@ -56,7 +59,9 @@ async def upload_document(
     response_model=DocumentOut,
     status_code=status.HTTP_202_ACCEPTED,
 )
+@limit(UPLOAD_LIMIT)
 def paste_document(
+    request: Request,
     sess: OwnedSession,
     user: CurrentUser,
     db: SessionDep,

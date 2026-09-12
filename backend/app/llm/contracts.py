@@ -91,3 +91,24 @@ class ScorecardOut(BaseModel):
     strengths: list[str] = Field(default_factory=list)
     gaps: list[str] = Field(default_factory=list)
     action_items: list[ActionItem] = Field(default_factory=list)
+
+
+class RewriteOut(BaseModel):
+    """A CV bullet *shape*, not a claim.
+
+    `placeholders` is validated separately by the service: a bullet that came
+    back with no placeholders and no supporting evidence is the fabrication case
+    this stage exists to prevent.
+    """
+
+    bullet: str = Field(min_length=10, max_length=400)
+    premise: str = ""
+    why: str = ""
+    if_you_cannot: str = ""
+    placeholders: list[str] = Field(default_factory=list)
+
+
+class CoverLetterOut(BaseModel):
+    subject: str = ""
+    body: str = Field(min_length=80)
+    claims_used: list[str] = Field(default_factory=list)

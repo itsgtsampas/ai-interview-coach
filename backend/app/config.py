@@ -37,6 +37,10 @@ class Settings(BaseSettings):
     # A text PDF yields far more than this per page; below it, assume a scan.
     min_chars_per_page: int = 150
 
+    # Rate limiting. Ceilings live in app/ratelimit.py; this only switches the
+    # whole mechanism off, which the test suite needs and nothing else should.
+    disable_rate_limits: bool = False
+
     # CORS
     cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
 

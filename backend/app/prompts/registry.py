@@ -9,9 +9,11 @@ from app.prompts import (
     analyse_match,
     build_scorecard,
     coach_agent,
+    cover_letter,
     evaluate_answer,
     extract_requirements,
     generate_questions,
+    rewrite_bullet,
 )
 
 ACTIVE: dict[str, str] = {
@@ -21,4 +23,6 @@ ACTIVE: dict[str, str] = {
     "evaluate_answer": evaluate_answer.VERSION,
     "build_scorecard": build_scorecard.VERSION,
     "coach_agent": coach_agent.VERSION,
+    "rewrite_bullet": rewrite_bullet.VERSION,
+    "cover_letter": cover_letter.VERSION,
 }

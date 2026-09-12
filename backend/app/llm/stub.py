@@ -10,12 +10,14 @@ Swap it for OpenAIProvider by setting LLM_PROVIDER=openai; no calling code chang
 
 import json
 import re
+from collections.abc import Iterator
 from typing import Any
 
 from pydantic import BaseModel
 
 from app.llm.base import AgentStep, LLMResponse, RenderedPrompt, ToolSpec
 from app.llm.tokens import estimate_tokens
+from app.sse import chunk_words
 from app.textutil import (
     best_evidence,
     build_idf,
@@ -165,6 +167,8 @@ class StubLLMProvider:
             "generate_questions": self._generate_questions,
             "evaluate_answer": self._evaluate_answer,
             "build_scorecard": self._build_scorecard,
+            "rewrite_bullet": self._rewrite_bullet,
+            "cover_letter": self._cover_letter,
         }.get(prompt.stage)
         if handler is None:
             raise ValueError(f"stub provider has no handler for stage {prompt.stage!r}")
@@ -176,6 +180,30 @@ class StubLLMProvider:
             prompt_tokens=estimate_tokens(prompt.system + prompt.user),
             completion_tokens=estimate_tokens(text),
         )
+
+    def stream_text(
+        self,
+        prompt: RenderedPrompt,
+        *,
+        model: str,
+        temperature: float,
+    ) -> Iterator[str]:
+        """Produce the prose for a stage, then hand it back in pieces.
+
+        The stub composes its answer in one pass, so the pieces are cut from a
+        finished string rather than arriving from a model. That is a real
+        difference and it is worth being plain about it: with LLM_PROVIDER=openai
+        the same call streams genuine tokens, and nothing above this line changes.
+        What the stub does give you is the true shape of the interface — the
+        client renders incrementally either way, so the streaming path is
+        exercised on every run rather than only when a key is present.
+        """
+        prose = {
+            "cover_letter": lambda p: self._cover_letter(p)["body"],
+        }.get(prompt.stage)
+        if prose is None:
+            raise ValueError(f"stub provider cannot stream stage {prompt.stage!r}")
+        yield from chunk_words(prose(prompt.payload), per_chunk=2)
 
     @staticmethod
     def _conclusive(observation: str | None) -> bool:
@@ -715,6 +743,256 @@ class StubLLMProvider:
             "model_answer": model_answer,
             "follow_up_question": follow_ups.get(weakest["name"], "Tell me more about that."),
         }
+
+    # -- stage 6: CV bullet rewrite -----------------------------------------
+    #
+    # Verbs are chosen from the requirement itself where the posting used one,
+    # because "Maintained" and "Designed" are not interchangeable to a screener.
+    _VERB_FOR = [
+        (("design", "architect", "model"), "Designed"),
+        (("build", "develop", "implement", "create", "deliver"), "Built"),
+        (("migrat", "port", "moderni"), "Migrated"),
+        (("maintain", "support", "operat", "run "), "Operated"),
+        (("test", "qa", "quality"), "Tested"),
+        (("optimis", "optimiz", "performance", "scal", "tune"), "Optimised"),
+        (("secur", "auth", "complian"), "Hardened"),
+        (("automat", "ci/cd", "pipeline", "deploy"), "Automated"),
+        (("lead", "mentor", "manage", "own"), "Led"),
+        (("integrat", "api", "service"), "Integrated"),
+    ]
+
+    # The outcome half of a bullet. Chosen by what the requirement is about, so
+    # a testing requirement does not ask the candidate for a latency figure.
+    _OUTCOME_FOR = [
+        (("test", "qa", "quality", "coverage"),
+         "raising coverage from [before]% to [after]%", ["[before]%", "[after]%"]),
+        (("performance", "latency", "scal", "optimis", "optimiz", "throughput"),
+         "cutting [metric] from [before] to [after]", ["[metric]", "[before]", "[after]"]),
+        (("deploy", "ci/cd", "pipeline", "automat", "release"),
+         "reducing deploys from [before] to [after]", ["[before]", "[after]"]),
+        (("secur", "complian", "auth"),
+         "closing [number] findings ahead of [audit or deadline]",
+         ["[number]", "[audit or deadline]"]),
+        (("lead", "mentor", "team", "manage"),
+         "across a team of [number]", ["[number]"]),
+        (("data", "etl", "pipeline", "warehouse", "analytics"),
+         "processing [volume] per [period]", ["[volume]", "[period]"]),
+    ]
+    _DEFAULT_OUTCOME = ("serving [number] [users or requests]",
+                        ["[number]", "[users or requests]"])
+
+    def _rewrite_bullet(self, payload: dict[str, Any]) -> dict:
+        requirement: str = payload.get("requirement", "").strip()
+        status: str = payload.get("status", "missing")
+        evidence: str | None = payload.get("evidence")
+        cv_context: str = payload.get("cv_context", "")
+
+        low = requirement.lower()
+        tech = [t for t in salient_terms(requirement)][:3]
+        subject = ", ".join(tech) if tech else _clip(requirement.rstrip("."), 60)
+
+        verb = next(
+            (v for cues, v in self._VERB_FOR if any(c in low for c in cues)),
+            "Delivered",
+        )
+        outcome, outcome_slots = next(
+            ((o, slots) for cues, o, slots in self._OUTCOME_FOR
+             if any(c in low for c in cues)),
+            self._DEFAULT_OUTCOME,
+        )
+
+        bullet = (
+            f"{verb} [what you built] using {subject}, {outcome}."
+        )
+        placeholders = ["[what you built]", *outcome_slots]
+
+        # The premise is the honest part: it names what the CV actually gave us,
+        # so the candidate can tell a scaffold from a suggestion.
+        if status == "partial" and evidence:
+            premise = (
+                f"Your CV already touches this — “{_clip(evidence, 110)}” — but it "
+                f"does not name {subject} or show an outcome. This bullet makes both explicit."
+            )
+        elif evidence:
+            premise = (
+                f"The closest sentence in your CV is “{_clip(evidence, 110)}”, which a "
+                f"screener would not read as {subject}."
+            )
+        else:
+            premise = (
+                f"Nothing in your CV mentions {subject}. Only use this bullet if you have "
+                f"the experience somewhere the CV has not yet captured — a side project, "
+                f"a task inside another role, a module at university."
+            )
+
+        why = (
+            f"A screener filtering for “{_clip(requirement, 70)}” scans for the technology "
+            f"and a number. This puts both on one line."
+        )
+
+        # The alternative for someone who genuinely does not have it. Naming the
+        # smallest real thing is more useful than telling them to "gain experience".
+        adjacent = self._nearest_cv_topic(cv_context, requirement)
+        if_you_cannot = (
+            f"If you have not done this, do not write it. The smallest version that "
+            f"earns the bullet honestly: build one small thing with {subject} "
+            + (f"on top of the {adjacent} work already on your CV" if adjacent else "this month")
+            + ", then write up what changed and by how much."
+        )
+
+        return {
+            "bullet": bullet,
+            "premise": premise,
+            "why": why,
+            "if_you_cannot": if_you_cannot,
+            "placeholders": placeholders,
+        }
+
+    @staticmethod
+    def _nearest_cv_topic(cv_context: str, requirement: str) -> str | None:
+        """The CV's own vocabulary closest to this requirement, for the fallback advice."""
+        req = set(tokens(requirement))
+        best, best_score = None, 0.0
+        for term in salient_terms(cv_context)[:60]:
+            overlap = len(req & set(tokens(term)))
+            score = overlap + (0.1 if len(term) > 4 else 0)
+            if score > best_score:
+                best, best_score = term, score
+        return best if best_score >= 1 else None
+
+    # -- stage 7: cover letter ----------------------------------------------
+    _OPENERS = {
+        "plain": "I am applying for the {role} role at {company}.",
+        "warm": "I would like to be considered for the {role} role at {company}.",
+        "formal": "I write to express my interest in the position of {role} at {company}.",
+    }
+    _CLOSERS = {
+        "plain": "I would welcome a conversation about how this maps onto what you need.",
+        "warm": "I would be glad to talk through any of this with you.",
+        "formal": "I would welcome the opportunity to discuss my application further.",
+    }
+
+    def _cover_letter(self, payload: dict[str, Any]) -> dict:
+        role: str = payload.get("role") or "the advertised"
+        company: str = payload.get("company") or "your team"
+        evidenced: list[dict] = payload.get("evidenced", [])
+        unevidenced: list[str] = payload.get("unevidenced", [])
+        tone: str = payload.get("tone", "plain")
+        if tone not in self._OPENERS:
+            tone = "plain"
+
+        paragraphs: list[str] = []
+        used: list[str] = []
+
+        lead = evidenced[0] if evidenced else None
+        opener = self._OPENERS[tone].format(role=role, company=company)
+        if lead:
+            opener += (
+                f" The requirement I match most directly is "
+                f"{self._lower_first(_clip(lead['requirement'], 90))}."
+            )
+        paragraphs.append(opener)
+
+        # One paragraph per evidenced requirement, each rewritten from the
+        # sentence that earned the verdict. Two is the limit: a third is where
+        # cover letters start repeating themselves.
+        for item in evidenced[:2]:
+            quote = (item.get("quote") or "").strip()
+            if not quote:
+                continue
+            used.append(item["requirement"])
+            paragraphs.append(
+                f"{self._first_person(quote)} "
+                f"That is the experience behind "
+                f"{self._lower_first(_clip(item['requirement'], 80))}."
+            )
+
+        # The honest acknowledgement. One sentence, no apology — and only for a
+        # must-have, because listing every nice-to-have you lack is self-sabotage.
+        if unevidenced:
+            bare, was_stripped = self._bare_requirement(unevidenced[0])
+            gap = _clip(bare, 80)
+            # Only re-case when the head is still the posting's own sentence
+            # opener; after a strip it is a proper noun ("Kubernetes", "GraphQL").
+            gap = gap if was_stripped else self._lower_first(gap)
+            paragraphs.append(
+                f"I have not yet worked directly on {gap}; the "
+                f"nearest thing on my CV is the work described above, and it is the "
+                f"area I am actively closing."
+            )
+
+        paragraphs.append(self._CLOSERS[tone])
+
+        if not evidenced:
+            # Nothing was evidenced, so there is no letter to write. Saying that
+            # is correct; inventing three paragraphs of enthusiasm is not.
+            paragraphs = [
+                opener,
+                "Your gap analysis did not find a single requirement this CV evidences, "
+                "so there is nothing here I can honestly claim. Rather than pad this "
+                "letter, go back to the gap analysis and the bullet suggestions first.",
+            ]
+
+        return {
+            "subject": f"Application — {role}",
+            "body": "\n\n".join(paragraphs),
+            "claims_used": used,
+        }
+
+    # Postings phrase requirements as noun phrases about experience
+    # ("Proven experience designing X"). Spliced into a sentence that already
+    # supplies the verb, the result is "worked directly on experience with X".
+    # Stripping the lead-in leaves the thing itself.
+    # The adjective group repeats: "Strong commercial experience with ..." stacks
+    # two before the noun, and postings stack three.
+    _REQ_LEAD_IN = re.compile(
+        r"^(?:(?:strong|solid|proven|demonstrable|deep|extensive|hands[- ]on|"
+        r"production|commercial|significant|excellent|good)\s+){0,3}"
+        r"(?:experience|background|track record|understanding|knowledge|familiarity)"
+        r"\s*(?:in|with|of|designing|building|working with)?\s+",
+        re.I,
+    )
+
+    @classmethod
+    def _bare_requirement(cls, text: str) -> tuple[str, bool]:
+        """The requirement with its "experience with" lead-in removed.
+
+        The flag says whether anything was actually stripped, which is what tells
+        the caller how to case the result: if a lead-in was removed, whatever is
+        now at the front is the technology itself and its capitalisation is real.
+        """
+        original = text.strip()
+        stripped = cls._REQ_LEAD_IN.sub("", original).strip()
+        if stripped and stripped != original:
+            return stripped, True
+        return original, False
+
+    @staticmethod
+    def _lower_first(text: str) -> str:
+        """Lowercase a fragment being spliced mid-sentence, unless it is a proper noun."""
+        if not text:
+            return text
+        head = text.split(" ", 1)[0]
+        if len(head) > 1 and head[1:].lower() != head[1:]:
+            return text  # "PostgreSQL", "CI/CD" — leave alone
+        return text[0].lower() + text[1:]
+
+    _PAST_VERB = re.compile(r"^(?:[A-Z][a-z]+(?:ed|t|lt|ilt|ught|ade|ed))\b")
+
+    @classmethod
+    def _first_person(cls, quote: str) -> str:
+        """Turn a CV sentence into a first-person claim.
+
+        CV bullets are already written as bare past-tense verb phrases ("Built a
+        payment service…"), so the transform is usually just a pronoun. When the
+        sentence does not start that way, wrapping it is safer than mangling it.
+        """
+        text = quote.strip().rstrip(".").strip()
+        if not text:
+            return ""
+        if cls._PAST_VERB.match(text):
+            return f"I {text[0].lower()}{text[1:]}."
+        return f"My CV records this as: “{text}”."
 
     def _build_scorecard(self, payload: dict[str, Any]) -> dict:
         report: dict = payload.get("report", {})

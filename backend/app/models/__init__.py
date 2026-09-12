@@ -1,4 +1,5 @@
-from app.models.analysis import MatchItem, MatchReport
+from app.models.analysis import EvidenceStatus, MatchItem, MatchReport
+from app.models.coaching import CoverLetter, CvSuggestion
 from app.models.document import (
     Document,
     DocumentKind,
@@ -13,10 +14,13 @@ from app.models.user import User
 
 __all__ = [
     "Answer",
+    "CoverLetter",
+    "CvSuggestion",
     "Document",
     "DocumentKind",
     "DocumentSource",
     "Evaluation",
+    "EvidenceStatus",
     "IngestStatus",
     "InterviewSession",
     "LLMCall",

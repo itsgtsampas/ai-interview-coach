@@ -6,6 +6,7 @@ information in structured form: real providers ignore it, the deterministic stub
 provider consumes it.  Swapping providers changes no calling code.
 """
 
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
@@ -61,6 +62,22 @@ class LLMProvider(Protocol):
         model: str,
         temperature: float,
     ) -> LLMResponse: ...
+
+    def stream_text(
+        self,
+        prompt: RenderedPrompt,
+        *,
+        model: str,
+        temperature: float,
+    ) -> Iterator[str]:
+        """Yield a prose answer in pieces, for stages rendered as they arrive.
+
+        Only prose stages implement this. Structured stages stay on
+        `complete_json`, because a half-parsed JSON object is not something a
+        user interface can render — progress for those is reported as stage
+        events instead of partial output.
+        """
+        ...
 
     def plan_step(
         self,
