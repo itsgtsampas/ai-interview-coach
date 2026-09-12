@@ -84,6 +84,37 @@ Alongside the stage sequence:
 
 ---
 
+## Switching on a real model
+
+The application ships on a deterministic offline provider and needs no key. To
+run it against `gpt-4o-mini` instead:
+
+1. Get a key at `platform.openai.com` and put it in `backend/.env` (copy
+   `.env.example` first). `.env` is gitignored — never commit it, and never
+   paste a key into a chat or an issue.
+2. Set `LLM_PROVIDER=openai`.
+3. Verify it before running anything else:
+
+```bash
+cd backend && .venv/bin/python -m evals.preflight
+```
+
+That makes one small real call — roughly a tenth of a cent — through the whole
+chain: settings, provider, HTTP, JSON mode, Pydantic validation, telemetry. If
+it fails, nothing else will work either, and it names the usual causes.
+
+**Spend is capped.** `MAX_SPEND_USD` (default `$5.00`) is a hard ceiling on
+cumulative cost across the database. Every call checks the running total before
+reaching a provider, so a retry loop or a runaway eval sweep cannot exceed it.
+Both model tiers default to `gpt-4o-mini`; `gpt-4o` is about 17x the price and
+has to be opted into explicitly.
+
+`EMBEDDING_PROVIDER` is separate and stays `stub` unless you change it. Switching
+it too would alter retrieval *and* require re-indexing every document, so it is
+worth doing as its own measured step rather than at the same time.
+
+---
+
 ## Running the tests
 
 ```bash

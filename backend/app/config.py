@@ -26,10 +26,21 @@ class Settings(BaseSettings):
     llm_provider: str = "stub"
     embedding_provider: str = "stub"
     openai_api_key: str | None = None
-    openai_chat_model_large: str = "gpt-4o"
+    # Both tiers default to the cheap model. The two-tier split is real — see
+    # the services — but defaulting LARGE to gpt-4o meant forgetting one line in
+    # .env silently ran almost the whole application at ~17x the price. Opting
+    # into the expensive model should be deliberate.
+    openai_chat_model_large: str = "gpt-4o-mini"
     openai_chat_model_small: str = "gpt-4o-mini"
     openai_embedding_model: str = "text-embedding-3-small"
     embedding_dim: int = 384
+
+    # Hard ceiling on cumulative spend, in USD, across the whole database.
+    # The rate limiter caps requests per caller; this caps money. A retry loop,
+    # a runaway eval sweep or a forgotten browser tab cannot exceed it, because
+    # every call checks the running total before it reaches a provider.
+    # 0 disables the check. Ignored entirely by the stub, which is free.
+    max_spend_usd: float = 5.0
 
     # Uploads
     max_upload_bytes: int = 5 * 1024 * 1024

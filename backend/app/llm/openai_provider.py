@@ -58,14 +58,18 @@ class OpenAIProvider:
                 {"role": "system", "content": prompt.system},
                 {"role": "user", "content": prompt.user},
             ],
-            "response_format": {
-                "type": "json_schema",
-                "json_schema": {
-                    "name": prompt.stage,
-                    "strict": False,
-                    "schema": schema.model_json_schema(),
-                },
-            },
+            # json_object, not json_schema. Structured Outputs rejects most of
+            # what Pydantic generates from our contracts - maxItems, minLength,
+            # minimum, default, and objects without additionalProperties:false -
+            # so passing model_json_schema() here 400s on the first request.
+            #
+            # This mode guarantees syntactically valid JSON and nothing more,
+            # which is exactly the split the design already assumes: the shape is
+            # described in the prompt's FORMAT block, and llm/structured.py
+            # validates it against the Pydantic model with one repair retry.
+            # That second line of defence exists precisely so the provider does
+            # not have to be trusted with the schema.
+            "response_format": {"type": "json_object"},
         })
         usage = data.get("usage", {})
         return LLMResponse(

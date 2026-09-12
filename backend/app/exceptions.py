@@ -65,6 +65,17 @@ class LLMOutputError(DomainError):
     status_code = status.HTTP_502_BAD_GATEWAY
 
 
+class BudgetExceeded(DomainError):
+    """The configured spend ceiling has been reached.
+
+    402 rather than 429: this is not "slow down", it is "this costs money and
+    the limit you set has been reached". Raising the limit is a deliberate act.
+    """
+
+    code = "budget_exceeded"
+    status_code = 402
+
+
 class ProviderUnavailable(DomainError):
     code = "provider_unavailable"
     status_code = status.HTTP_503_SERVICE_UNAVAILABLE
