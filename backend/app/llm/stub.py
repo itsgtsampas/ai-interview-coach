@@ -71,14 +71,33 @@ _INCLUDE_HEAD = re.compile(
     re.I,
 )
 _EXCLUDE_HEAD = re.compile(
-    r"^\s*(about\s+(the\s+)?(role|us|the\s+company|team)|what\s+we\s+offer|benefits?|perks?|"
+    r"^\s*(about\b|what\s+we\s+offer|benefits?|perks?|"
     r"how\s+to\s+apply|our\s+mission|why\s+join|compensation|salary|equal\s+opportunity|"
     r"the\s+role|overview|company|compensation|salary|pay|package|"
-    r"important\s+notice|by\s+submitting|refer\s+a\s+friend)"
+    r"important\s+notice|by\s+submitting|refer\s+a\s+friend|"
+    r"additional\s+information|being\s+a\s+part\s+of|you\s+will\s+be\s+provided|"
+    r"we\s+(?:will\s+)?(?:offer|provide)|what\s+we\s+provide|job\s+description|"
+    r"company\s+description|responsibilities)"
     r"\b.{0,24}$",
     re.I,
 )
-_SOFT_BUCKET = re.compile(r"nice|bonus|preferred|desirable", re.I)
+_SOFT_BUCKET = re.compile(r"nice|bonus|preferred|desirable|a\s+plus|advantage", re.I)
+
+# A line ending in a colon introduces a list; it is never itself a requirement.
+# Postings lean on these heavily ("What would make you a fit for the role:",
+# "Being a part of the team, you will be provided with:").
+_LEAD_IN = re.compile(r":\s*$")
+
+# Below this a quote is a list entry rather than a statement about work.
+_FRAGMENT_CHARS = 25
+
+# Benefits read like requirements to a keyword matcher but are what the employer
+# gives, not what it asks for.
+_BENEFIT = re.compile(
+    r"\b(insurance|allowance|bonus\s+scheme|well[\s-]being|onboarding|buddy|"
+    r"career\s+growth|development\s+plan|hybrid\s+working|day\s+off|holiday|"
+    r"pension|perks?|udemy|learning\s+opportunit)", re.I,
+)
 
 # Used only by the headingless fallback, to tell a requirement from company
 # marketing. A requirement either names a technology (which shows up as a
@@ -249,16 +268,32 @@ class StubLLMProvider:
                 continue
 
             cleaned = _BULLET.sub("", raw).strip(" .;")
-            if not (12 <= len(cleaned) <= 260):
+
+            # A colon-terminated line introduces the list that follows. It sets
+            # the bucket, and is never emitted as a requirement itself.
+            if _LEAD_IN.search(line):
+                if _SOFT_BUCKET.search(line):
+                    bucket = "nice_to_have"
                 continue
-            letters = [c for c in cleaned if c.isalpha()]
-            if letters and all(c.isupper() for c in letters):
+            if _BENEFIT.search(cleaned):
+                continue
+
+            # Requirements are often a bare technology name — "Java", "Docker",
+            # "Spring Boot" — so a flat minimum length discards the most
+            # important ones. A short line is kept when it names something.
+            long_enough = len(cleaned) >= 12 or (
+                len(cleaned) >= 3 and bool(salient_terms(cleaned))
+            )
+            if not long_enough or len(cleaned) > 260:
+                continue
+            letters = [ch for ch in cleaned if ch.isalpha()]
+            if letters and all(ch.isupper() for ch in letters):
                 continue  # an unrecognised heading, not a requirement
-            if len(keywords(cleaned)) < 2:
+            if len(keywords(cleaned)) < 1:
                 continue
 
             low = cleaned.lower()
-            if _SOFT_BUCKET.search(low) or "a plus" in low:
+            if _SOFT_BUCKET.search(low):
                 item_bucket = "nice_to_have"
             elif any(w in low for w in ("must", "required", "strong", "solid", "proven")):
                 item_bucket = "must_have"
@@ -338,9 +373,18 @@ class StubLLMProvider:
             # long section can accumulate coverage from unrelated lines, which
             # would credit the candidate for evidence no sentence actually gives.
             # Prefer a sentence carrying the decisive term over a merely wordy one.
+            # Rank on evidence first, then reject bare fragments. A skills-list
+            # entry and a sentence describing the work cover the requirement
+            # equally, but "Spring Boot" is a weaker citation than the sentence
+            # saying what was built with it. The preference is only strong
+            # enough to break that tie: among real sentences, retrieval order
+            # decides, so the most relevant passage still wins.
+            best_rank: tuple = (False, 0.0, False)
             for c in cands:
                 quote, cov, has_pivot = best_evidence(text, c["text"], idf)
-                if (has_pivot, cov) > (pivot_present, best_cov):
+                rank = (has_pivot, round(cov, 3), len(quote) >= _FRAGMENT_CHARS)
+                if rank > best_rank:
+                    best_rank = rank
                     best_cov, best, best_quote, pivot_present = cov, c, quote, has_pivot
 
             # The distinctive term must be present. Without this gate,

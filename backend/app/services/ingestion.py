@@ -145,6 +145,10 @@ def ingest_document(
     db.commit()
 
     try:
+        # Purge this document's previous vectors before writing new ones.
+        store.delete_document(
+            user_id=user_id, session_id=doc.session_id, document_id=doc.id or 0
+        )
         loaded = load_document(doc)
         label = "CV" if doc.kind == DocumentKind.cv else "Job description"
         chunked = chunk_document(

@@ -347,3 +347,93 @@ def test_work_a_cv_can_show_still_counts(auth_client, cv_bytes, jd_bytes):
     mentoring = next(i for i in report["items"] if "mentoring" in i["requirement"].lower())
     assert mentoring["kind"] == "evidenceable"
     assert mentoring["status"] == "strong"
+
+
+NETCOMPANY_JD = """About the job
+Company Description
+We are dedicated to responsible digitalisation across Europe.
+
+Job Description
+Joining us as a Software Engineer, you will build back-end systems.
+
+Qualifications
+What would make you a fit for the role:
+Degree in Computer Science, Software Engineering or a related discipline
+Experience in
+Java
+Spring Framework
+Spring Boot
+Docker
+Excellent communication skills
+Fluency in English
+It would also be a plus if you match some of the following:
+Familiarity with Kubernetes
+Knowledge of Apache Kafka
+Experience in React
+
+Additional Information
+Being a part of the team, you will be provided with:
+The opportunity to work in a modern environment & in a hybrid working model
+A seamless onboarding experience and a buddy to support you
+A competitive compensation & benefits package
+Health and life insurance program
+"""
+
+
+def test_a_posting_of_bare_technology_names(auth_client, cv_bytes):
+    """Regression from a real Netcompany posting.
+
+    Its requirements are bare technology names under a colon-terminated lead-in,
+    followed by a benefits section. Previously the lead-ins and the benefits
+    were scored as requirements while "Java", "Docker" and "Spring Boot" were
+    discarded for being too short — the requirements that matter most.
+    """
+    sid = auth_client.post("/api/v1/sessions", json={"title": "Netcompany"}).json()["id"]
+    auth_client.post(f"/api/v1/sessions/{sid}/documents?kind=cv",
+                     files={"file": ("cv.pdf", cv_bytes, "application/pdf")})
+    auth_client.post(f"/api/v1/sessions/{sid}/documents/text?kind=jd",
+                     json={"text": NETCOMPANY_JD})
+
+    report = auth_client.post(f"/api/v1/sessions/{sid}/analysis").json()
+    reqs = [i["requirement"] for i in report["items"]]
+    joined = " ".join(reqs).lower()
+
+    # Bare technology names survive.
+    for tech in ("Java", "Spring Framework", "Spring Boot", "Docker"):
+        assert any(tech.lower() in r.lower() for r in reqs), f"{tech} was dropped: {reqs}"
+
+    # Lead-ins, benefits and boilerplate do not become requirements.
+    for noise in ("would make you a fit", "plus if you match", "provided with",
+                  "onboarding", "insurance", "compensation", "hybrid working"):
+        assert noise not in joined, f"{noise!r} was scored as a requirement"
+
+    # The nice-to-have lead-in still switches the bucket.
+    kubernetes = next(i for i in report["items"] if "kubernetes" in i["requirement"].lower())
+    assert kubernetes["category"] == "nice_to_have"
+
+
+def test_a_skills_list_entry_counts_as_evidence(auth_client, jd_bytes):
+    """A CV listing "React.js" evidences React, even though the line is short.
+
+    The sentence splitter discarded anything under 15 characters, which is
+    exactly the length of a skills-list entry naming a technology.
+    """
+    from app.textutil import sentences
+
+    found = sentences("› HTML · CSS · JSP\n› React.js\n› Angular.js")
+    assert any("React.js" in s for s in found), found
+
+
+def test_a_descriptive_sentence_is_preferred_over_a_list_entry():
+    """Both cover the requirement; only one says what was done with it."""
+    from app.textutil import best_evidence, build_idf
+
+    passages = [
+        "SKILLS\nSpring Boot",
+        "Developed a Spring Boot microservice implementing an IVR calling flow "
+        "for a national telecoms provider.",
+    ]
+    idf = build_idf(passages)
+    quotes = [best_evidence("Spring Boot", p, idf) for p in passages]
+    assert all(q[2] for q in quotes), "both should carry the decisive term"
+    assert len(quotes[0][0]) < 25 and len(quotes[1][0]) >= 25

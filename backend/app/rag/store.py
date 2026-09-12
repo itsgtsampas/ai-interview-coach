@@ -213,6 +213,25 @@ def parent_text(parent_id: str, *, user_id: int, session_id: int) -> str | None:
     return str(metas[0].get("parent_text")) if metas else None
 
 
+def delete_document(*, user_id: int, session_id: int, document_id: int) -> None:
+    """Drop one document's vectors.
+
+    Re-indexing must purge first: any change to the text shifts chunk
+    boundaries, so the new chunks get new ids and the old ones survive
+    alongside them. Stale chunks then keep being retrieved — which is how a CV
+    went on matching against letter-spaced text long after that was repaired.
+    """
+    try:
+        with _WRITE_LOCK:
+            get_collection().delete(where={"$and": [
+                {"user_id": {"$eq": user_id}},
+                {"session_id": {"$eq": session_id}},
+                {"document_id": {"$eq": document_id}},
+            ]})
+    except Exception:
+        pass
+
+
 def delete_session(*, user_id: int, session_id: int) -> None:
     """Purge every vector for a session. Called when the user deletes it."""
     try:

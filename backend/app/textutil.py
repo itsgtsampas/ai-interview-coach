@@ -26,6 +26,12 @@ STOPWORDS = {
     "demonstrated", "proven", "practical", "solid", "commercial", "hands", "exposure",
     "familiarity", "comfortable", "attention", "understanding", "expertise", "deep",
     "extensive", "relevant", "ideally", "preferably", "such", "well", "very",
+    "fluency", "proficiency", "familiarity", "competence", "mastery", "command",
+    "degree", "framework", "frameworks", "api", "apis", "tool", "tools",
+    "technology", "technologies", "systems", "platform", "platforms", "stack",
+    "library", "libraries", "solutions", "applications", "environment",
+    "production", "commercial", "professional", "previous", "prior", "recent",
+    "on", "off", "up", "side",
 }
 
 
@@ -138,12 +144,20 @@ def reflow(text: str) -> str:
 
 
 def sentences(text: str) -> list[str]:
+    """Split into citable units.
+
+    The length floor keeps fragments out of citations, but a skills list is
+    made of entries far shorter than it — "React.js", "Docker" — and those are
+    the lines that name a technology. A short line is kept when it names
+    something, which is why a CV listing React.js was reported as having no
+    evidence of React.
+    """
     out = []
     for block in reflow(text).splitlines():
         for raw in _SENT_SPLIT.split(block):
-            s = raw.strip(" \t•-–—*·")
-            if len(s) >= 15:
-                out.append(s)
+            candidate = raw.strip(" \t•-–—*·›»‣▪")
+            if len(candidate) >= 15 or (candidate and salient_terms(candidate)):
+                out.append(candidate)
     return out
 
 
@@ -165,14 +179,22 @@ def salient_terms(text: str) -> list[str]:
     "preferably AWS", "preferably" is the rarer word and the meaningless one.
     """
     out: list[str] = []
-    # A requirement is one sentence, so only its first word is a sentence opener.
-    # Splitting on "." to find openers would break "Next.js" into "Next" and "js".
-    for word in text.split()[1:]:
+    # Every word counts. Skipping the first one — on the theory that it opens a
+    # sentence — silently erased the technology from requirements that are just
+    # its name: "Java", "Docker", "Spring Framework". Sentence openers are
+    # handled by STOPWORDS instead, which is where that judgement belongs.
+    for word in text.split():
         cleaned = word.strip("(),;:/\"'").rstrip(".")
         if len(cleaned) >= 2 and any(c.isupper() for c in cleaned):
             for tok in tokens(cleaned):
-                if tok not in STOPWORDS and len(tok) >= 2:
-                    out.append(tok)
+                if len(tok) < 2 or tok in STOPWORDS:
+                    continue
+                # "Hands-on" and "Full-stack" are phrasing, not technologies.
+                # A hyphenated word built from a stopword is one too, and must
+                # not become the term a requirement hinges on.
+                if any(part in STOPWORDS for part in tok.split("-")):
+                    continue
+                out.append(tok)
     return list(dict.fromkeys(out))
 
 
