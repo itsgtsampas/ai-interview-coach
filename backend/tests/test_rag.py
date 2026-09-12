@@ -146,3 +146,97 @@ def test_letter_spaced_headings_are_repaired():
     # Ordinary prose, including real single-letter words, is left alone.
     assert unspace("I am a backend engineer") == "I am a backend engineer"
     assert unspace("Python, SQL and Go") == "Python, SQL and Go"
+
+
+# --- the pivot gate, and the ways it went wrong ----------------------------
+#
+# A real Java CV scored 19/100 against a real Java posting. Every failure below
+# is one of the reasons, reduced to the smallest case that reproduces it.
+
+CV = (
+    "CORE SKILLS\n"
+    "Java EE / Java 21\nSpring Boot\nMicroservices\nREST APIs / SOAP\n"
+    "Hibernate\nOracle SQL / MySQL / PG\nMaven . Git\nCI/CD Pipelines\n"
+    "PROFILE\n"
+    "Software Engineer with 3+ years of experience. Specialises in Java/Spring Boot "
+    "backend development, microservices architecture, and enterprise application "
+    "engineering.\n"
+    "EXPERIENCE\n"
+    "Migrated legacy Java 8 enterprise applications to Java 17, covering dependency "
+    "upgrades, API compatibility, and runtime validation across multiple modules.\n"
+    "EDUCATION\nBSc in Computer Science\n"
+)
+
+
+def _verdict(requirement: str, cv: str = CV):
+    from app.textutil import best_evidence, build_idf
+
+    idf = build_idf([cv])
+    return best_evidence(requirement, cv, idf)
+
+
+def test_a_requirement_naming_several_things_is_not_gated_on_the_one_absent_term():
+    """IDF is built from the CV, so a term the CV lacks carries the most weight.
+
+    Choosing one decisive term across the whole requirement therefore picked the
+    term the CV did NOT have, every time. "Solid knowledge of Java (17+), the JVM
+    ecosystem and object-oriented design" hinged on JVM and reported a Java CV as
+    having no Java.
+    """
+    _, _, gate, decisive = _verdict(
+        "Solid knowledge of Java (17+), the JVM ecosystem and object-oriented design"
+    )
+    assert gate and decisive, "the CV plainly evidences Java"
+
+
+def test_a_compound_noun_still_requires_its_distinctive_modifier():
+    """The protection the gate exists for must survive the fix above.
+
+    "Familiarity with GraphQL APIs" is not evidenced by a CV that only has REST
+    APIs — within a compound, the modifier is mandatory and the head is not.
+    """
+    _, _, _, decisive = _verdict("Familiarity with GraphQL APIs")
+    assert not decisive
+
+
+def test_a_slash_compound_in_the_cv_does_not_hide_its_parts():
+    """_WORD keeps "CI/CD" whole, which also buries Java inside "Java/Spring"."""
+    from app.textutil import _matches, tokens
+
+    hay = set(tokens("Specialises in Java/Spring Boot backend development"))
+    assert _matches("java", hay), "the CV says Java, in a slash compound"
+    assert _matches("spring", hay)
+    assert not _matches("python", hay), "matching parts must not match anything"
+
+
+def test_rest_and_restful_are_the_same_requirement():
+    """The 5-character prefix rule cannot bridge these: "restf" vs "rest"."""
+    _, _, _, decisive = _verdict("Experience designing and consuming RESTful APIs")
+    assert decisive
+
+
+def test_an_alternative_the_cv_satisfies_counts():
+    """"Quarkus (or Spring Boot ...)" is met by a CV with Spring Boot."""
+    _, _, _, decisive = _verdict(
+        "Experience with the Quarkus framework (or Spring Boot with willingness "
+        "to move to Quarkus)"
+    )
+    assert decisive
+
+
+def test_a_degree_requirement_is_not_gated_on_the_word_bachelor():
+    _, _, _, decisive = _verdict(
+        "Bachelor's degree in Computer Science or a related field"
+    )
+    assert decisive, "the CV says BSc in Computer Science"
+
+
+def test_a_genuinely_absent_skill_is_still_absent():
+    """The whole point: none of the above may turn a gap into evidence."""
+    for absent in (
+        "Experience with Couchbase or another NoSQL document database",
+        "Familiarity with containers and orchestration (Docker, Kubernetes)",
+        "Experience with messaging / event-driven architectures (e.g. Kafka)",
+    ):
+        _, _, _, decisive = _verdict(absent)
+        assert not decisive, f"{absent!r} is not in this CV"

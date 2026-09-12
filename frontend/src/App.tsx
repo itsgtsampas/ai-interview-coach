@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import {
-  Navigate, Outlet, Route, BrowserRouter as Router, Routes, useParams,
+  Link, Navigate, Outlet, Route, BrowserRouter as Router, Routes, useParams,
 } from "react-router-dom";
 
 import { api } from "./api/client";
 import type { SessionOut } from "./api/types";
 import { Rail } from "./components/Rail";
 import { TopBar } from "./components/TopBar";
-import { Spinner } from "./components/bits";
+import { ErrorBox, Head, Spinner } from "./components/bits";
 import { AuthProvider, useAuth } from "./lib/auth";
 import { Coach } from "./pages/Coach";
 import { Dashboard } from "./pages/Dashboard";
@@ -45,13 +45,42 @@ function Shell({
 function SessionShell() {
   const { id } = useParams();
   const [session, setSession] = useState<SessionOut | null>(null);
+  const [error, setError] = useState<unknown>(null);
 
   const refresh = useCallback(async () => {
     if (!id) return;
     setSession(await api.getSession(Number(id)));
   }, [id]);
 
-  useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => {
+    setError(null);
+    refresh().catch(setError);
+  }, [refresh]);
+
+  // Without this, a session that cannot be loaded — deleted, or belonging to
+  // someone else — left every page below spinning on "Loading…" forever, because
+  // they each wait on a session that is never going to arrive.
+  if (error) {
+    return (
+      <div className="app">
+        <TopBar />
+        <div className="shell shell--plain">
+          <main>
+            <div className="sheet">
+              <Head margin={<span className="label">Not available</span>}>
+                <h1 className="display h1">This session is not available</h1>
+                <p className="prose">
+                  It may have been deleted, or it belongs to a different account.
+                </p>
+                <ErrorBox error={error} />
+                <Link className="btn" to="/">Back to your sessions</Link>
+              </Head>
+            </div>
+          </main>
+        </div>
+      </div>
+    );
+  }
 
   return <Shell session={session} refresh={refresh} />;
 }

@@ -50,6 +50,10 @@ SYNONYMS: dict[str, set[str]] = {
     "tracing": {"jaeger", "opentelemetry", "datadog"},
     "cloud": {"aws", "azure", "gcp", "ec2", "s3", "rds"},
     "ci/cd": {"ci", "cd", "pipeline", "pipelines", "actions", "jenkins", "deploys"},
+    # The 5-character prefix rule in _matches cannot bridge these: "restful"[:5]
+    # is "restf", which no form of "REST" starts with.
+    "restful": {"rest", "rest/soap", "soap/rest"},
+    "rest": {"restful", "rest/soap", "soap/rest"},
     "ci": {"jenkins", "actions", "circleci", "pipeline", "pipelines"},
     "cd": {"deploys", "deployment", "pipeline", "pipelines"},
     "pipelines": {"actions", "jenkins", "circleci", "deploys"},
@@ -166,6 +170,13 @@ def _matches(keyword: str, haystack_tokens: set[str]) -> bool:
         return True
     if SYNONYMS.get(keyword, set()) & haystack_tokens:
         return True
+    # _WORD deliberately keeps slash-compounds whole so that "CI/CD" survives as
+    # one term. The cost is that a CV reading "Java/Spring Boot" hides both names
+    # inside the token "java/spring", and a search for "java" finds nothing. The
+    # parts are matched here rather than at tokenisation, so IDF weights and
+    # coverage denominators are unaffected.
+    if any("/" in h and keyword in h.split("/") for h in haystack_tokens):
+        return True
     # Partial credit for morphological variants: containerise / containerisation.
     return len(keyword) >= 5 and any(h.startswith(keyword[:5]) for h in haystack_tokens)
 
@@ -198,20 +209,77 @@ def salient_terms(text: str) -> list[str]:
     return list(dict.fromkeys(out))
 
 
-def pivot_gate(needle: str, haystack: str, idf: dict[str, float]) -> bool:
-    """Does the haystack contain the requirement's decisive term?
+# Where one requirement stops naming one thing and starts naming another:
+# punctuation, coordinators, and the prepositions that introduce a new noun
+# phrase. A spaced slash only — a bare one is inside a token ("CI/CD", "REST/SOAP"),
+# which _WORD deliberately keeps whole.
+_COORDINATOR = re.compile(
+    r"[,;()\[\]]|\s+/\s+|\b(?:or|and|in|of|with|for|to|using|from|across)\b",
+    re.I,
+)
 
-    When a requirement names technologies, the most distinctive of them must be
-    present: "Familiarity with GraphQL APIs" is not evidenced by a CV that only
-    mentions APIs. When a requirement names no technology at all ("mentoring
-    engineers"), there is no decisive term and coverage alone decides.
+
+def _coordinate_groups(text: str) -> list[str]:
+    """Split a requirement into the separate things it names.
+
+    "Solid knowledge of Java (17+), the JVM ecosystem and object-oriented design"
+    names three things, not one. Treating it as one phrase is what makes the gate
+    below demand every term at once.
     """
-    salient = salient_terms(needle)
-    if not salient:
-        return True  # no gate to apply
+    return [part.strip() for part in _COORDINATOR.split(text) if part and part.strip()]
+
+
+def decisive_hit(needle: str, haystack: str, idf: dict[str, float]) -> bool:
+    """Did the haystack actually contain the decisive term of something named?
+
+    `pivot_gate` returns True in two very different situations: a decisive term
+    was found, or the requirement named nothing distinctive so there was no gate
+    to apply. Callers that want to treat a match as positive evidence need to
+    tell those apart, and this is the narrower question.
+    """
+    groups = [g for g in (_coordinate_groups(needle) or [needle]) if salient_terms(g)]
+    if not groups:
+        return False
     max_idf = max(idf.values(), default=2.0)
-    decisive = max(salient, key=lambda k: idf.get(k, max_idf))
-    return _matches(decisive, set(tokens(haystack)))
+    hay = set(tokens(haystack))
+    return any(
+        _matches(max(salient_terms(g), key=lambda k: idf.get(k, max_idf)), hay)
+        for g in groups
+    )
+
+
+def pivot_gate(needle: str, haystack: str, idf: dict[str, float]) -> bool:
+    """Does the haystack contain the decisive term of anything the requirement names?
+
+    The gate exists so that "Familiarity with GraphQL APIs" is not evidenced by a
+    CV that only mentions APIs: within a compound noun, the distinctive modifier
+    is mandatory and the generic head is not.
+
+    But it must ask that question per *thing named*, not once over the whole
+    sentence. IDF here is built from the retrieved CV passages, so a term the CV
+    never mentions carries the maximum weight — meaning a single decisive term
+    chosen across the whole requirement is biased towards the one term the CV
+    lacks. "Solid knowledge of Java (17+), the JVM ecosystem..." then hinges on
+    JVM and reports a Java CV as having no Java, which is the precise opposite of
+    what this gate is for.
+
+    So: split into coordinate groups, apply the compound rule inside each, and
+    pass if any group is evidenced. How *completely* the requirement is met is
+    not this function's job — weighted_coverage already measures that, and a CV
+    with Java but not the JVM ecosystem lands on "partial", which is correct.
+    """
+    groups = [g for g in (_coordinate_groups(needle) or [needle]) if salient_terms(g)]
+    if not groups:
+        return True  # nothing distinctive named; coverage alone decides
+
+    max_idf = max(idf.values(), default=2.0)
+    hay = set(tokens(haystack))
+    for group in groups:
+        salient = salient_terms(group)
+        decisive = max(salient, key=lambda k: idf.get(k, max_idf))
+        if _matches(decisive, hay):
+            return True
+    return False
 
 
 def coverage(needle: str, haystack: str) -> float:
@@ -287,7 +355,7 @@ def best_sentence_weighted(
 
 def best_evidence(
     query: str, passage: str, idf: dict[str, float]
-) -> tuple[str, float, bool]:
+) -> tuple[str, float, bool, bool]:
     """Pick the sentence that best evidences `query`, preferring one that carries
     the requirement's decisive term.
 
@@ -296,7 +364,9 @@ def best_evidence(
     that has it — which is how a CV reading "Built the customer dashboard in React
     and TypeScript" was reported as no evidence of React.
 
-    Returns (quote, weighted coverage, whether the decisive term is present).
+    Returns (quote, weighted coverage, whether the gate passed, whether a
+    decisive term was actually found). The last two differ when the requirement
+    names nothing distinctive: the gate opens, but nothing was matched.
     """
     cands = sentences(passage) or [" ".join(reflow(passage).split())]
     scored = [
@@ -307,4 +377,4 @@ def best_evidence(
     pool = gated or scored
     pool.sort(key=lambda t: (t[0], t[2]), reverse=True)
     cov, has_pivot, _, quote = pool[0]
-    return quote[:400], cov, has_pivot
+    return quote[:400], cov, has_pivot, decisive_hit(query, quote, idf)

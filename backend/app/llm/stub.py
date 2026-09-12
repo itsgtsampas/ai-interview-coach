@@ -415,12 +415,14 @@ class StubLLMProvider:
             # enough to break that tie: among real sentences, retrieval order
             # decides, so the most relevant passage still wins.
             best_rank: tuple = (False, 0.0, False)
+            decisive_found = False
             for c in cands:
-                quote, cov, has_pivot = best_evidence(text, c["text"], idf)
+                quote, cov, has_pivot, decisive = best_evidence(text, c["text"], idf)
                 rank = (has_pivot, round(cov, 3), len(quote) >= _FRAGMENT_CHARS)
                 if rank > best_rank:
                     best_rank = rank
                     best_cov, best, best_quote, pivot_present = cov, c, quote, has_pivot
+                    decisive_found = decisive
 
             # The distinctive term must be present. Without this gate,
             # "Familiarity with GraphQL APIs" scores as partial against any CV
@@ -431,7 +433,17 @@ class StubLLMProvider:
             # hand against the backend pair alone — scored 0.710.
             if best is not None and pivot_present and best_cov >= 0.22:
                 status, conf = "strong", min(0.95, 0.45 + best_cov)
-            elif best is not None and pivot_present and best_cov >= 0.10:
+            elif best is not None and pivot_present and (best_cov >= 0.10 or decisive_found):
+                # A decisive term that was actually found IS evidence, whatever
+                # the coverage arithmetic says. Weighted coverage gives every
+                # term the corpus has never seen the maximum weight, so a
+                # requirement listing several facets the CV lacks is dragged
+                # below the threshold however strongly it evidences the main
+                # one: "Solid knowledge of Java (17+), the JVM ecosystem and
+                # object-oriented design" scored 0.0965 against a CV that
+                # migrated Java 8 to 21. Reporting that as "no evidence of Java"
+                # is the failure this branch exists to prevent. It is still only
+                # "partial" — the other facets genuinely are unevidenced.
                 status, conf = "partial", 0.3 + best_cov
             else:
                 status, conf = "missing", max(0.10, best_cov / 2)
@@ -458,10 +470,20 @@ class StubLLMProvider:
                     + (f"nothing addressing {', '.join(missing_kw)}. " if missing_kw else "it is thin. ")
                     + "An interviewer would probe how deep this actually goes."
                 )
-            else:
+            elif not cands:
                 reasoning = (
-                    "No passage in the CV covers this requirement above the relevance floor. "
+                    "Nothing in the CV was retrieved for this requirement at all. "
                     "Treat it as a genuine gap rather than an omission of wording."
+                )
+            else:
+                # Passages were retrieved and read; none named the thing asked
+                # for. Saying so is more useful — and more honest — than the old
+                # wording, which claimed nothing had been looked at.
+                named = ", ".join(salient_terms(text)[:3])
+                reasoning = (
+                    f"The CV was searched and the closest passages do not mention "
+                    + (f"{named}. " if named else "anything this requirement asks for. ")
+                    + "Treat it as a genuine gap rather than an omission of wording."
                 )
 
             items.append({
