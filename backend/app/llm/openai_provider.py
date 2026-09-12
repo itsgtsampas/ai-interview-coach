@@ -30,6 +30,23 @@ class OpenAIProvider:
             )
         self._key = settings.openai_api_key
 
+    @staticmethod
+    def _describe(response: httpx.Response) -> str:
+        """The API's own explanation, not just its status code.
+
+        raise_for_status() discards the body, which is where OpenAI puts the
+        only useful part: a 429 is "slow down" *or* "you have no credits", and
+        those need completely different responses from the reader. Reporting
+        just the status turned a one-line fix into a guessing game.
+        """
+        try:
+            err = response.json().get("error", {}) or {}
+        except ValueError:
+            return f"HTTP {response.status_code}"
+        code = err.get("code") or err.get("type") or f"HTTP {response.status_code}"
+        message = err.get("message") or response.text[:200]
+        return f"{code}: {message}"
+
     def _post(self, body: dict) -> dict:
         try:
             r = httpx.post(
@@ -38,9 +55,11 @@ class OpenAIProvider:
                 headers={"Authorization": f"Bearer {self._key}"},
                 timeout=60.0,
             )
-            r.raise_for_status()
-        except httpx.HTTPError as exc:
-            raise ProviderUnavailable(f"OpenAI request failed: {exc}") from exc
+        except httpx.HTTPError as exc:  # transport-level: DNS, TLS, timeout
+            raise ProviderUnavailable(f"Could not reach OpenAI: {exc}") from exc
+
+        if r.is_error:
+            raise ProviderUnavailable(f"OpenAI rejected the request — {self._describe(r)}")
         return r.json()
 
     def complete_json(
@@ -111,7 +130,11 @@ class OpenAIProvider:
                 headers={"Authorization": f"Bearer {self._key}"},
                 timeout=120.0,
             ) as response:
-                response.raise_for_status()
+                if response.is_error:
+                    response.read()  # the body is not loaded on a streamed response
+                    raise ProviderUnavailable(
+                        f"OpenAI rejected the stream — {self._describe(response)}"
+                    )
                 for line in response.iter_lines():
                     if not line.startswith("data: "):
                         continue
