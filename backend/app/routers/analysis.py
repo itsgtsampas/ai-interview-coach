@@ -12,6 +12,8 @@ router = APIRouter(prefix="/api/v1/sessions", tags=["analysis"])
 def _serialise(report, items) -> MatchReportOut:
     counts = {s.value: 0 for s in EvidenceStatus}
     for i in items:
+        if str(getattr(i.kind, "value", i.kind)) == "behavioural":
+            continue  # excluded from the score, so excluded from its tally
         key = i.status.value if hasattr(i.status, "value") else str(i.status)
         counts[key] = counts.get(key, 0) + 1
     return MatchReportOut(
@@ -26,6 +28,7 @@ def _serialise(report, items) -> MatchReportOut:
                 id=i.id,
                 requirement=i.requirement,
                 category=i.category,
+                kind=i.kind,
                 status=i.status,
                 confidence=i.confidence,
                 reasoning=i.reasoning,

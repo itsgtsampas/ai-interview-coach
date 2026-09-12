@@ -83,6 +83,34 @@ _SOFT_BUCKET = re.compile(r"nice|bonus|preferred|desirable", re.I)
 # Used only by the headingless fallback, to tell a requirement from company
 # marketing. A requirement either names a technology (which shows up as a
 # capitalised term) or uses the vocabulary of asking for something.
+# Traits a CV cannot demonstrate. Deliberately narrow: "mentoring engineers" and
+# "collaborating with designers" describe things a person did and belong in the
+# score, whereas "excellent communication skills" describes what they are like.
+# Bare "team" is excluded for that reason — "mentoring within a team" is
+# evidenced work; "work well as part of a team" is a disposition.
+_BEHAVIOURAL_TRAIT = re.compile(
+    r"\b(communication|organisational|organizational|interpersonal|attitude|"
+    r"personality|motivated|passionate|enthusiastic|ambitious|proactive|"
+    r"self[\s-]starter|autonomous|independently|teamwork|team\s+player|"
+    r"part\s+of\s+a\s+team|team\s+environment|fast[\s-]paced|quick\s+learner|"
+    r"mindset|work\s+ethic|detail[\s-]oriented|adaptable|resilient|"
+    r"results[\s-]driven|can[\s-]do|willingness\s+to\s+learn)\b",
+    re.I,
+)
+
+
+def _classify_kind(text: str) -> str:
+    """Can a CV evidence this, or only an interview?
+
+    A requirement naming a technology is evidenceable regardless of the words
+    around it: "strong communication skills in Python code review" is still
+    about Python.
+    """
+    if salient_terms(text):
+        return "evidenceable"
+    return "behavioural" if _BEHAVIOURAL_TRAIT.search(text) else "evidenceable"
+
+
 _REQUIREMENT_SIGNAL = re.compile(
     r"\b(years?|experience|degree|proficien\w*|knowledge|abilit\w*|familiar\w*|"
     r"fluen\w*|skills?|understanding|expertise|background\s+in|comfortable|"
@@ -277,7 +305,12 @@ class StubLLMProvider:
             if key in seen or not key:
                 continue
             seen.add(key)
-            out.append({"text": _clip(text, 220), "category": item_bucket})
+            clipped = _clip(text, 220)
+            out.append({
+                "text": clipped,
+                "category": item_bucket,
+                "kind": _classify_kind(clipped),
+            })
             if len(out) >= 12:
                 break
 
@@ -355,6 +388,7 @@ class StubLLMProvider:
             items.append({
                 "requirement": text,
                 "category": req.get("category", "must_have"),
+                "kind": req.get("kind", "evidenceable"),
                 "status": status,
                 "confidence": round(conf, 2),
                 "reasoning": reasoning,
@@ -364,17 +398,23 @@ class StubLLMProvider:
                 "evidence_section": section,
             })
 
+        # Behavioural requirements are excluded: no CV can evidence them, so
+        # counting them as missing would mark the candidate down for a property
+        # of the medium rather than of their experience. They are surfaced as
+        # interview questions instead.
         weights = {"strong": 1.0, "partial": 0.5, "missing": 0.0}
+        scored = [i for i in items if i["kind"] == "evidenceable"]
         total = weight_sum = 0.0
-        for it in items:
+        for it in scored:
             w = 2.0 if it["category"] == "must_have" else 1.0
             total += weights[it["status"]] * w
             weight_sum += w
         overall = int(round(100 * total / weight_sum)) if weight_sum else 0
 
-        n_missing = sum(1 for i in items if i["status"] == "missing")
-        n_strong = sum(1 for i in items if i["status"] == "strong")
-        must_missing = [i["requirement"] for i in items
+        n_missing = sum(1 for i in scored if i["status"] == "missing")
+        n_strong = sum(1 for i in scored if i["status"] == "strong")
+        n_behavioural = len(items) - len(scored)
+        must_missing = [i["requirement"] for i in scored
                         if i["status"] == "missing" and i["category"] == "must_have"]
 
         if overall >= 75:
@@ -387,8 +427,11 @@ class StubLLMProvider:
             verdict = "Weak match"
 
         summary = (
-            f"{n_strong} of {len(items)} requirements are backed by concrete evidence in the CV; "
+            f"{n_strong} of {len(scored)} requirements are backed by concrete evidence in the CV; "
             f"{n_missing} have none. "
+            + (f"A further {n_behavioural} ask about how you work rather than what you "
+               "have done, so they are left to the interview and excluded from the score. "
+               if n_behavioural else "")
             + (f"The gaps that will cost you most are: {'; '.join(must_missing[:3])}. "
                if must_missing else "No must-have requirement is completely unevidenced. ")
             + "Every verdict below links to the exact sentence it was drawn from, so you can "
@@ -402,9 +445,14 @@ class StubLLMProvider:
         n_behav: int = payload.get("n_behavioural", 3)
         role: str = payload.get("target_role") or "this role"
 
+        # Technical questions come only from requirements a CV could evidence;
+        # the rest are exactly what the behavioural half of the interview is for.
+        evidenceable = [i for i in items if i.get("kind", "evidenceable") == "evidenceable"]
+        behavioural_reqs = [i for i in items if i.get("kind") == "behavioural"]
+
         status_rank = {"missing": 0.0, "partial": 1.0, "strong": 2.0}
         ordered = sorted(
-            items,
+            evidenceable,
             key=lambda i: status_rank.get(i["status"], 3.0)
             + (0.0 if i["category"] == "must_have" else 1.5),
         )
@@ -452,8 +500,27 @@ class StubLLMProvider:
                 "linked_requirement": req,
             })
 
+        # A behavioural requirement the posting actually states beats a generic
+        # one from the bank: the candidate is asked about what this employer
+        # said they care about.
+        for req in behavioural_reqs[:n_behav]:
+            trait = _clip(req["requirement"], 90)
+            questions.append({
+                "category": "behavioural",
+                "text": (
+                    f"This role asks for {trait[0].lower() + trait[1:] if trait[:2] != trait[:2].upper() else trait}. "
+                    "Tell me about a specific time that was tested — what happened, "
+                    "what you did, and how it turned out."
+                ),
+                "rationale": "Asked because the job description states this and no CV can "
+                             "evidence it. This is where it gets assessed.",
+                "difficulty": 3,
+                "linked_requirement": req["requirement"],
+            })
+
+        # Top up from the bank when the posting names fewer traits than asked for.
         offset = len(items) % max(1, len(_BEHAVIOURAL_BANK))
-        for i in range(n_behav):
+        for i in range(n_behav - len(behavioural_reqs[:n_behav])):
             text, competency = _BEHAVIOURAL_BANK[(offset + i) % len(_BEHAVIOURAL_BANK)]
             questions.append({
                 "category": "behavioural",

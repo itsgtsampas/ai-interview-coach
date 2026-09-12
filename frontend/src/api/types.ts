@@ -6,6 +6,7 @@ export type DocumentSource = "pdf" | "text";
 export type IngestStatus = "pending" | "processing" | "ready" | "failed";
 export type EvidenceStatus = "strong" | "partial" | "missing";
 export type RequirementCategory = "must_have" | "nice_to_have";
+export type RequirementKind = "evidenceable" | "behavioural";
 export type QuestionCategory = "technical" | "behavioural";
 export type SessionStatus =
   | "created" | "ingesting" | "ready" | "analysed" | "in_progress" | "completed";
@@ -46,6 +47,7 @@ export interface MatchItem {
   id: number;
   requirement: string;
   category: RequirementCategory;
+  kind: RequirementKind;
   status: EvidenceStatus;
   confidence: number;
   reasoning: string;

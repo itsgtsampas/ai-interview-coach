@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 class RequirementOut(BaseModel):
     text: str = Field(min_length=3, max_length=300)
     category: Literal["must_have", "nice_to_have"] = "must_have"
+    kind: Literal["evidenceable", "behavioural"] = "evidenceable"
 
 
 class RequirementsOut(BaseModel):
@@ -26,6 +27,7 @@ class RequirementsOut(BaseModel):
 class MatchItemOut(BaseModel):
     requirement: str
     category: Literal["must_have", "nice_to_have"] = "must_have"
+    kind: Literal["evidenceable", "behavioural"] = "evidenceable"
     status: Literal["strong", "partial", "missing"]
     confidence: float = Field(ge=0.0, le=1.0)
     reasoning: str = ""

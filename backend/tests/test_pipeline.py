@@ -289,3 +289,61 @@ def test_a_posting_with_no_requirements_is_refused_not_scored(auth_client, cv_by
     r = auth_client.post(f"/api/v1/sessions/{sid}/analysis")
     assert r.status_code == 422
     assert r.json()["error"] == "no_requirements_found"
+
+
+def test_traits_a_cv_cannot_show_are_excluded_from_the_score(auth_client, cv_bytes):
+    """A CV cannot evidence "excellent communication skills".
+
+    Counting such a requirement as missing marks the candidate down for a
+    limitation of the medium, not of their experience, so it is excluded from
+    the score and routed to the behavioural questions instead.
+    """
+    sid = auth_client.post("/api/v1/sessions", json={"title": "Traits"}).json()["id"]
+    auth_client.post(f"/api/v1/sessions/{sid}/documents?kind=cv",
+                     files={"file": ("cv.pdf", cv_bytes, "application/pdf")})
+    auth_client.post(f"/api/v1/sessions/{sid}/documents/text?kind=jd", json={"text": (
+        "SENIOR BACKEND ENGINEER\n\nWhat you'll need\n"
+        "Fluency with Python and FastAPI\n"
+        "Proven experience operating PostgreSQL at scale\n"
+        "Excellent communication and organisational skills\n"
+        "The ability to work well as part of a team in a fast-paced environment\n"
+        "To be a quick learner with an ambitious attitude\n")})
+
+    report = auth_client.post(f"/api/v1/sessions/{sid}/analysis").json()
+    kinds = {i["requirement"]: i["kind"] for i in report["items"]}
+
+    behavioural = [r for r, k in kinds.items() if k == "behavioural"]
+    assert len(behavioural) == 3, kinds
+    assert all(
+        any(w in r.lower() for w in ("communication", "team", "learner"))
+        for r in behavioural
+    )
+    # Naming a technology keeps a requirement in the score.
+    assert kinds["Fluency with Python and FastAPI"] == "evidenceable"
+
+    # The three traits are unevidenced, but the score is computed only over the
+    # two evidenceable requirements, both of which this CV covers.
+    assert report["overall_score"] == 100, report["overall_score"]
+
+    questions = auth_client.post(
+        f"/api/v1/sessions/{sid}/questions?technical=2&behavioural=3").json()
+    behavioural_qs = [q for q in questions if q["category"] == "behavioural"]
+    assert len(behavioural_qs) == 3
+    # Each behavioural question is tied to a trait the posting actually named,
+    # rather than to the generic bank.
+    assert {q["linked_requirement"] for q in behavioural_qs} == set(behavioural)
+
+
+def test_work_a_cv_can_show_still_counts(auth_client, cv_bytes, jd_bytes):
+    """Mentoring and collaboration describe things a person did, so they stay in
+    the score. Only dispositions are excluded."""
+    sid = auth_client.post("/api/v1/sessions", json={"title": "Evidenceable"}).json()["id"]
+    auth_client.post(f"/api/v1/sessions/{sid}/documents?kind=cv",
+                     files={"file": ("cv.pdf", cv_bytes, "application/pdf")})
+    auth_client.post(f"/api/v1/sessions/{sid}/documents?kind=jd",
+                     files={"file": ("jd.pdf", jd_bytes, "application/pdf")})
+    report = auth_client.post(f"/api/v1/sessions/{sid}/analysis").json()
+
+    mentoring = next(i for i in report["items"] if "mentoring" in i["requirement"].lower())
+    assert mentoring["kind"] == "evidenceable"
+    assert mentoring["status"] == "strong"

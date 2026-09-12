@@ -66,6 +66,7 @@ export function Report() {
   }
 
   const counts = report.counts ?? {};
+  const behavioural = report.items.filter((i) => i.kind === "behavioural");
 
   return (
     <div className="sheet">
@@ -82,7 +83,7 @@ export function Report() {
         <ErrorBox error={error} />
       </Head>
 
-      {report.items.map((item) => (
+      {report.items.filter((i) => i.kind !== "behavioural").map((item) => (
         <Row
           key={item.id}
           margin={
@@ -106,6 +107,23 @@ export function Report() {
           />
         </Row>
       ))}
+
+      {/* Requirements no CV can evidence. Scoring them would mark the candidate
+          down for a limitation of the medium, so they are shown apart and
+          carry no verdict — they become interview questions instead. */}
+      {behavioural.length ? (
+        <Row margin={<span className="label">Not on a CV</span>}>
+          <h2 className="display h3">Asked about in the interview</h2>
+          <p className="prose" style={{ margin: "0.4rem 0 0.9rem", fontSize: "0.89rem" }}>
+            The posting asks for {behavioural.length === 1 ? "this" : "these"} too. No CV
+            can show {behavioural.length === 1 ? "it" : "them"}, so {behavioural.length === 1
+            ? "it is" : "they are"} left out of the score and turned into practice questions.
+          </p>
+          <ul className="list list--bullet">
+            {behavioural.map((i) => <li key={i.id}>{i.requirement}</li>)}
+          </ul>
+        </Row>
+      ) : null}
 
       <Row margin={<span className="label">Next</span>}>
         <p className="prose">

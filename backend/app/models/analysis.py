@@ -11,6 +11,19 @@ class RequirementCategory(str, Enum):
     nice_to_have = "nice_to_have"
 
 
+class RequirementKind(str, Enum):
+    """Whether a CV is capable of evidencing this requirement at all.
+
+    "Excellent communication skills" cannot be shown by any CV, so counting it
+    as missing penalises the candidate for a limitation of the medium. Those
+    requirements are assessed in the interview instead, and are excluded from
+    the match score.
+    """
+
+    evidenceable = "evidenceable"
+    behavioural = "behavioural"
+
+
 class EvidenceStatus(str, Enum):
     strong = "strong"
     partial = "partial"
@@ -37,6 +50,7 @@ class MatchItem(SQLModel, table=True):
     report_id: int = Field(foreign_key="match_report.id", index=True)
     requirement: str
     category: RequirementCategory = RequirementCategory.must_have
+    kind: RequirementKind = RequirementKind.evidenceable
     status: EvidenceStatus = EvidenceStatus.missing
     confidence: float = 0.0
     evidence_quote: str | None = None

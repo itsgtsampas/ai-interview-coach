@@ -1,12 +1,13 @@
 from pydantic import BaseModel
 
-from app.models.analysis import EvidenceStatus, RequirementCategory
+from app.models.analysis import EvidenceStatus, RequirementCategory, RequirementKind
 
 
 class MatchItemOut(BaseModel):
     id: int
     requirement: str
     category: RequirementCategory
+    kind: RequirementKind
     status: EvidenceStatus
     confidence: float
     reasoning: str

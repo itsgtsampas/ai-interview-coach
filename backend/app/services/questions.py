@@ -25,6 +25,7 @@ def generate(
         {
             "requirement": i.requirement,
             "category": i.category.value if hasattr(i.category, "value") else str(i.category),
+            "kind": i.kind.value if hasattr(i.kind, "value") else str(i.kind),
             "status": i.status.value if hasattr(i.status, "value") else str(i.status),
             "evidence_quote": i.evidence_quote,
         }

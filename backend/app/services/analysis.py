@@ -133,6 +133,7 @@ def run_analysis(
             report_id=report.id or 0,
             requirement=item.requirement,
             category=item.category,
+            kind=item.kind,
             status=item.status,
             confidence=item.confidence,
             evidence_quote=item.evidence_quote,
