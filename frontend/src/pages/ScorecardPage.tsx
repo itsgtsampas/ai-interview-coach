@@ -3,8 +3,8 @@ import { Link, useOutletContext } from "react-router-dom";
 
 import { api, ApiError } from "../api/client";
 import type { Scorecard, SessionOut } from "../api/types";
-import { Bars, Chip, ErrorBox, Head, Row, Spinner } from "../components/bits";
-import { Ring } from "../components/charts";
+import { Chip, ErrorBox, Head, Row, Spinner } from "../components/bits";
+import { ArcGauge, BulletBar } from "../components/gauges";
 import { DownloadPdf } from "../components/DownloadPdf";
 
 interface Ctx { session: SessionOut | null; refresh: () => Promise<void> }
@@ -73,7 +73,7 @@ export function ScorecardPage() {
       <Head margin={<span className="label">Stage 4</span>}>
         <h1 className="display h1">Scorecard</h1>
         <div className="scorehead">
-          <Ring value={card.readiness_score} label={card.readiness_band} />
+          <ArcGauge value={card.readiness_score} band={card.readiness_band} />
           <div>
             <p className="prose scorehead__sum">{card.summary}</p>
             <DownloadPdf sessionId={card.session_id} />
@@ -84,9 +84,15 @@ export function ScorecardPage() {
 
       {Object.keys(card.competencies).length ? (
         <Row margin={<span className="label">Competencies</span>}>
-          <Bars data={card.competencies} max={5} />
+          {Object.entries(card.competencies)
+            .sort((a, b) => a[1] - b[1])
+            .map(([name, value], i) => (
+              <BulletBar key={name} label={name} value={value} max={5}
+                         benchmark={3.5} index={i} />
+            ))}
           <p className="hint" style={{ marginTop: "0.8rem" }}>
-            Averaged across every answer you scored, weakest first.
+            Averaged across every answer you scored, weakest first. The notch on each
+            bar is 3.5 — roughly where an answer stops costing you the interview.
           </p>
         </Row>
       ) : null}

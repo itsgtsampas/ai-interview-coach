@@ -4,8 +4,9 @@ import { Link, useOutletContext } from "react-router-dom";
 import { api, ApiError } from "../api/client";
 import type { Answer, Question, SessionOut } from "../api/types";
 import {
-  Bars, Chip, ErrorBox, Head, Row, Spinner, toneForScore,
+  Chip, ErrorBox, Head, Row, Spinner, toneForScore,
 } from "../components/bits";
+import { BulletBar } from "../components/gauges";
 import { streamRequest } from "../lib/sse";
 
 interface Ctx { session: SessionOut | null; refresh: () => Promise<void> }
@@ -29,7 +30,12 @@ function Feedback({ answer }: { answer: Answer }) {
           </>
         }
       >
-        <Bars data={scores} max={5} />
+        {Object.entries(scores)
+          .sort((a, b) => a[1] - b[1])
+          .map(([name, value], i) => (
+            <BulletBar key={name} label={name} value={value} max={5}
+                       benchmark={3.5} index={i} />
+          ))}
         <details className="disclose">
           <summary>Why this score</summary>
           <p className="reasoning">{e.reasoning}</p>

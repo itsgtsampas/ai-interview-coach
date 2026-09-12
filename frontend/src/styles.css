@@ -686,52 +686,10 @@ select.input {
 
 /* --- data display -------------------------------------------------------- */
 
-.gauge {
-  display: flex;
-  align-items: baseline;
-  gap: 0.5rem;
-}
-.gauge__n {
-  font-size: 3.4rem;
-}
 .gauge__d {
   font-family: var(--f-mono);
   font-size: 0.8rem;
   color: var(--ink-3);
-}
-
-.meter {
-  height: 4px;
-  background: var(--paper-3);
-  border-radius: 2px;
-  overflow: hidden;
-}
-.meter__fill {
-  height: 100%;
-  background: var(--verdict, var(--ink));
-  transition: width 0.7s cubic-bezier(0.2, 0.7, 0.3, 1);
-}
-
-.bars {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  margin: 0;
-}
-.bar__top {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  margin-bottom: 0.28rem;
-}
-.bar__name {
-  font-size: 0.86rem;
-  font-weight: 500;
-}
-.bar__val {
-  font-family: var(--f-mono);
-  font-size: 0.75rem;
-  color: var(--ink-2);
 }
 
 .cards {
@@ -1742,4 +1700,241 @@ details.disclose[open] > summary::before {
   border-radius: 50%;
   font-size: 0.6rem;
   color: var(--ink-2);
+}
+
+/* ============================================================================
+   Gauges, bullet bars and step progress
+
+   Motion rules, applied consistently below:
+   · Entry decelerates (ease-out) — the figure arrives.
+   · Steady progress is linear — a bar filling is not an element arriving.
+   · Nothing animates a layout property. Transforms, opacity and stroke only.
+   · Every animation here is ornament: the number beside it always carries the
+     same information, which is why reduced motion removes them outright.
+   ========================================================================= */
+
+.arc {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 0;
+  flex: 0 0 auto;
+  max-width: 13rem;
+}
+
+.arc__dial {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+}
+
+.arc__dial svg {
+  position: absolute;
+  inset: 0;
+}
+
+.arc__track {
+  fill: none;
+  stroke: var(--rule);
+}
+
+.arc__value {
+  fill: none;
+  /* Long enough to read as drawing, short enough not to delay the page. */
+  transition: stroke-dasharray 1.1s cubic-bezier(0.16, 0.84, 0.32, 1);
+}
+
+.arc__tick {
+  stroke: var(--paper);
+  stroke-width: 2;
+}
+
+.arc__ticklabel {
+  font-family: var(--f-mono);
+  font-size: 7.5px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  fill: var(--ink-3);
+}
+
+.arc__mid {
+  display: grid;
+  place-items: center;
+  line-height: 1;
+  /* The figure counts up while the arc sweeps; nudging it up keeps it centred
+     in the dial rather than in the square the dial is drawn in. */
+  transform: translateY(-2px);
+}
+
+.arc__v {
+  font-size: 2.7rem;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.arc__d {
+  font-family: var(--f-mono);
+  font-size: 0.64rem;
+  color: var(--ink-3);
+  margin-top: 0.25rem;
+}
+
+.arc__band,
+.arc__cap {
+  text-align: center;
+  text-wrap: balance;
+}
+
+/* Negative margin pulls the label into the dial's open bottom, where the 270°
+   arc leaves a gap for exactly this. */
+.arc__band { margin-top: -1.6rem; }
+.arc__cap { margin-top: 0.25rem; font-size: 0.72rem; line-height: 1.35; }
+
+/* --- bullet bars ---------------------------------------------------------- */
+
+.bullet + .bullet {
+  margin-top: 0.85rem;
+}
+
+.bullet__top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.3rem;
+}
+
+.bullet__name {
+  font-size: 0.88rem;
+  color: var(--ink-2);
+}
+
+.bullet__val {
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.bullet__max {
+  font-size: 0.72rem;
+  color: var(--ink-3);
+}
+
+.bullet__track {
+  position: relative;
+  height: 7px;
+  border-radius: 4px;
+  background: var(--rule-2);
+  /* The benchmark notch stands proud of the bar, so this cannot clip. */
+  overflow: visible;
+}
+
+/* The clip does the rounding, so the fill can be scaled without its end caps
+   stretching with it. */
+.bullet__clip {
+  position: absolute;
+  inset: 0;
+  border-radius: 4px;
+  overflow: hidden;
+  display: block;
+}
+
+.bullet__fill {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform-origin: left center;
+  /* Linear: a bar filling is steady progress, not an arrival. */
+  transition: transform 0.75s linear;
+  will-change: transform;
+}
+
+/* The benchmark notch. A short rule through the bar, not a coloured zone —
+   it marks a target, it does not pass judgement. */
+.bullet__mark {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  background: var(--ink);
+  opacity: 0.42;
+  border-radius: 1px;
+}
+
+/* --- step progress -------------------------------------------------------- */
+
+.stepbar {
+  margin: 0.9rem 0 0.2rem;
+}
+
+.stepbar__track {
+  position: relative;
+  display: flex;
+  gap: 3px;
+  height: 4px;
+}
+
+.stepbar__seg {
+  flex: 1;
+  border-radius: 2px;
+  background: var(--rule);
+}
+
+/* The sweep sits over the segments and reveals them, so the bar reads as one
+   continuous measure while the gaps still count the stages. */
+.stepbar__sweep {
+  position: absolute;
+  inset: 0;
+  transform-origin: left center;
+  background: var(--ink);
+  border-radius: 2px;
+  opacity: 0.9;
+  transition: transform 0.8s linear;
+  /* Masked by the segment gaps above it. */
+  clip-path: inset(0 round 2px);
+  mix-blend-mode: multiply;
+}
+
+.stepbar__label {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.7rem;
+}
+
+/* --- chart entry ---------------------------------------------------------- */
+
+.chart__line {
+  transition: stroke-dashoffset 1s cubic-bezier(0.16, 0.84, 0.32, 1);
+}
+
+.chart__area {
+  transition: opacity 0.7s ease-out 0.5s;
+}
+
+.chart__dot {
+  transition: r 0.15s ease, opacity 0.35s ease-out;
+}
+
+.spark__line {
+  transition: stroke-dashoffset 0.9s cubic-bezier(0.16, 0.84, 0.32, 1);
+}
+
+.scorehead__sum {
+  margin-top: 0;
+}
+
+@media (max-width: 720px) {
+  .arc__v { font-size: 2.3rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .arc__value,
+  .bullet__fill,
+  .stepbar__sweep,
+  .chart__line,
+  .chart__area,
+  .chart__dot,
+  .spark__line {
+    transition: none;
+  }
 }

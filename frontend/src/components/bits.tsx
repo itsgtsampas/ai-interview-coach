@@ -85,58 +85,14 @@ export function EvidenceLine({
 
 /* --- data ---------------------------------------------------------------- */
 
-export function Meter({ value, max = 100, tone }: { value: number; max?: number; tone?: string }) {
-  return (
-    <div className="meter">
-      <div
-        className="meter__fill"
-        style={{
-          width: `${Math.min(100, (value / max) * 100)}%`,
-          ["--verdict" as string]: tone ? `var(--${tone})` : "var(--ink)",
-        }}
-      />
-    </div>
-  );
-}
-
 /** 0-100 readiness maps onto the same three-step scale as an evidence verdict,
- *  so a colour always means the same thing wherever it appears. */
+ *  so a colour always means the same thing wherever it appears. Shared by the
+ *  gauges, the charts and the verdict chips. */
 export function toneForScore(score: number, max = 100): EvidenceStatus {
   const pct = (score / max) * 100;
   if (pct >= 70) return "strong";
   if (pct >= 45) return "partial";
   return "missing";
-}
-
-export function Gauge({ value, suffix = "/100" }: { value: number; suffix?: string }) {
-  return (
-    <div className="gauge">
-      <span className="num gauge__n" style={{ color: `var(--${toneForScore(value)})` }}>
-        {value}
-      </span>
-      <span className="gauge__d">{suffix}</span>
-    </div>
-  );
-}
-
-export function Bars({ data, max = 5 }: { data: Record<string, number>; max?: number }) {
-  const entries = Object.entries(data).sort((a, b) => a[1] - b[1]);
-  if (!entries.length) return null;
-  return (
-    <div className="bars">
-      {entries.map(([name, value]) => (
-        <div key={name}>
-          <div className="bar__top">
-            <span className="bar__name">{name}</span>
-            <span className="bar__val">
-              {value.toFixed(1)} / {max}
-            </span>
-          </div>
-          <Meter value={value} max={max} tone={toneForScore(value, max)} />
-        </div>
-      ))}
-    </div>
-  );
 }
 
 /* --- feedback ------------------------------------------------------------ */

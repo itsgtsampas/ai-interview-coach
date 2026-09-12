@@ -11,9 +11,10 @@
  *  candidate, coloured on the same three-step scale as every verdict elsewhere.
  */
 
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 
 import { toneForScore } from "./bits";
+import { useCountUp, useMounted, usePrefersReducedMotion } from "../lib/motion";
 
 /* --- shared geometry ----------------------------------------------------- */
 
@@ -56,6 +57,11 @@ export function Trend({
   const [active, setActive] = useState<number | null>(null);
   const titleId = useId();
   const width = 620;
+  const reduced = usePrefersReducedMotion();
+  const mounted = useMounted(reduced ? 0 : 80);
+  // Measured once the path exists, so the dash animation knows how far to travel.
+  const path = useRef<SVGPathElement | null>(null);
+  const length = path.current?.getTotalLength?.() ?? 1200;
 
   if (points.length === 0) return null;
 
@@ -110,15 +116,37 @@ export function Trend({
           </text>
         ))}
 
-        <path d={area} className="chart__area" />
-        <path d={line} className="chart__line" />
+        <path
+          d={area}
+          className="chart__area"
+          style={{ opacity: reduced || mounted ? undefined : 0 }}
+        />
+        <path
+          ref={path}
+          d={line}
+          className="chart__line"
+          style={
+            reduced
+              ? undefined
+              : {
+                  strokeDasharray: length,
+                  strokeDashoffset: mounted ? 0 : length,
+                }
+          }
+        />
 
         {points.map((p, i) => (
           <g key={`${p.label}-${i}`}>
             <circle
               cx={x(i)} cy={y(p.value)} r={active === i ? 6 : 4.5}
               className="chart__dot"
-              style={{ fill: `var(--${toneForScore(p.value, max)})` }}
+              style={{
+                fill: `var(--${toneForScore(p.value, max)})`,
+                // Each dot lands as the line reaches it.
+                opacity: reduced || mounted ? 1 : 0,
+                transitionDelay: reduced ? undefined
+                  : `${300 + (i / Math.max(1, points.length - 1)) * 600}ms`,
+              }}
             />
             {/* A generous transparent target: 4.5px of dot is not a hit area. */}
             <circle
@@ -173,6 +201,8 @@ export function Trend({
 /** A line small enough to sit inside a table row. No axes, no interaction —
  *  it carries shape only, and the figures beside it carry the values. */
 export function Sparkline({ values, max = 5 }: { values: number[]; max?: number }) {
+  const reduced = usePrefersReducedMotion();
+  const mounted = useMounted(reduced ? 0 : 200);
   if (values.length < 2) return null;
   const w = 68;
   const h = 20;
@@ -182,7 +212,11 @@ export function Sparkline({ values, max = 5 }: { values: number[]; max?: number 
 
   return (
     <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="spark" aria-hidden="true">
-      <path d={d} className="spark__line" />
+      <path
+        d={d}
+        className="spark__line"
+        style={reduced ? undefined : { strokeDasharray: 200, strokeDashoffset: mounted ? 0 : 200 }}
+      />
       <circle cx={w} cy={y(values[values.length - 1])} r="2.5"
               style={{ fill: `var(--${toneForScore(values[values.length - 1], max)})` }} />
     </svg>
@@ -192,20 +226,32 @@ export function Sparkline({ values, max = 5 }: { values: number[]; max?: number 
 /** A headline figure. `tone` is opt-in: most stats are counts, and a count is
  *  not a judgement, so it stays achromatic. */
 export function Stat({
-  label, value, suffix, tone, note,
+  label, value, suffix, tone, note, decimals = 0,
 }: {
   label: string;
   value: string | number;
   suffix?: string;
   tone?: string;
   note?: string;
+  /** Numeric values count up; strings are shown as given. */
+  decimals?: number;
 }) {
+  const numeric = typeof value === "number";
+  const counted = useCountUp(numeric ? (value as number) : 0);
+  const shown = numeric ? counted.toFixed(decimals) : value;
+
   return (
     <div className="stat">
       <span className="label">{label}</span>
-      <p className="stat__v num" style={tone ? { color: `var(--${tone})` } : undefined}>
-        {value}
-        {suffix ? <span className="stat__suffix">{suffix}</span> : null}
+      {/* The final value is what a screen reader should hear, not the blur of
+          intermediate ones the animation produces. */}
+      <p
+        className="stat__v num"
+        style={tone ? { color: `var(--${tone})` } : undefined}
+        aria-label={numeric ? `${value}${suffix ?? ""}` : undefined}
+      >
+        <span aria-hidden={numeric || undefined}>{shown}</span>
+        {suffix ? <span className="stat__suffix" aria-hidden="true">{suffix}</span> : null}
       </p>
       {note ? <span className="hint stat__note">{note}</span> : null}
     </div>
@@ -227,45 +273,6 @@ export function Delta({ value, suffix = "" }: { value: number; suffix?: string }
       </svg>
       {up ? "+" : ""}{value}{suffix}
     </span>
-  );
-}
-
-/** The readiness score as a ring.
- *
- *  A ring rather than a bar because this number is the page's subject, not one
- *  row in a comparison — and because a full circle makes "out of 100" legible
- *  without a second axis. */
-export function Ring({
-  value, max = 100, size = 132, label,
-}: { value: number; max?: number; size?: number; label?: string }) {
-  const stroke = 9;
-  const r = (size - stroke) / 2;
-  const circumference = 2 * Math.PI * r;
-  const filled = (Math.min(value, max) / max) * circumference;
-  const tone = toneForScore(value, max);
-
-  return (
-    <div className="ring" style={{ width: size, height: size }}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
-        <circle
-          cx={size / 2} cy={size / 2} r={r}
-          fill="none" stroke="var(--rule)" strokeWidth={stroke}
-        />
-        <circle
-          cx={size / 2} cy={size / 2} r={r}
-          fill="none" stroke={`var(--${tone})`} strokeWidth={stroke}
-          strokeLinecap="round"
-          strokeDasharray={`${filled} ${circumference}`}
-          transform={`rotate(-90 ${size / 2} ${size / 2})`}
-          className="ring__fill"
-        />
-      </svg>
-      <div className="ring__mid">
-        <span className="num ring__v" style={{ color: `var(--${tone})` }}>{value}</span>
-        <span className="ring__d">/ {max}</span>
-      </div>
-      {label ? <span className="ring__label label">{label}</span> : null}
-    </div>
   );
 }
 

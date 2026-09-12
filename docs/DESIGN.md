@@ -1002,7 +1002,40 @@ Three deliberate restraints:
   it is announced without a hover event. Every chart is backed by a real `<table>` behind a
   "Show the numbers" disclosure.
 
-### 16.7 The scorecard PDF
+### 16.7 Score display and motion
+
+Scores are shown on a 270° dial whose two threshold ticks — 45 and 70 — are
+drawn and **labelled** on the arc. The guidance for this chart type is explicit
+that colour zones alone are insufficient, and it is also the honest thing: the
+reader can see that 55 sits inside "nearly" without having to decode an amber.
+The dial track, ticks and labels are achromatic; the only coloured element is
+the value arc, which is a verdict. Competencies use bullet bars with a benchmark
+notch at 3.5, which is the compact form of "value against a target".
+
+Motion is ~60 lines of CSS transitions plus one `requestAnimationFrame` loop for
+the count-ups, rather than a library. Four rules, applied consistently:
+
+- **Entry decelerates, progress is linear.** A figure arriving uses ease-out; a
+  bar filling uses `linear`, because steady progress through a quantity is not
+  an element arriving on screen. Using `ease-in-out` for both is the anti-pattern.
+- **Nothing animates a layout property.** The bullet fill is `scaleX` inside a
+  rounded clip, not an animated `width` — width lays the page out on every
+  frame, and the clip stops the rounded end caps stretching with the bar.
+- **The number is never wrong, only un-animated.** `requestAnimationFrame` does
+  not run in a background tab, so a count-up that began at zero would still read
+  zero when the reader switched to it. `useCountUp` settles on its final value
+  when `document.hidden`, at mount and mid-flight. The animated element also
+  carries the final value in an `aria-label`, so a screen reader hears the
+  figure rather than the blur of intermediate ones.
+- **Reduced motion removes the animation, not shortens it.** Every animated
+  element is covered by a `prefers-reduced-motion` rule and every hook collapses
+  to its final state. Nothing here carries information the text beside it does
+  not, so there is nothing lost by removing it.
+
+Replacing `Gauge`, `Meter` and `Bars` left them unused; they were deleted rather
+than left behind.
+
+### 16.8 The scorecard PDF
 
 Laid out for print, not screenshotted: one column, a fixed measure, the evidence line
 rendered as a marked-up quote with its verdict rule, and a provenance footer naming the
@@ -1011,7 +1044,7 @@ bytes rather than a signed public URL, because it quotes the candidate's CV and 
 reachable by anyone holding a link. The browser fetches it with its `Authorization` header
 and hands the blob to a synthetic link, revoking the object URL immediately.
 
-### 16.8 Accessibility fixes this work forced
+### 16.9 Accessibility fixes this work forced
 
 Auditing the new pages surfaced two contrast failures against WCAG AA, both of which
 predated this work and one of which was everywhere:

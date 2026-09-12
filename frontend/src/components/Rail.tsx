@@ -3,6 +3,7 @@ import { Link, NavLink, useLocation, useParams } from "react-router-dom";
 
 import { api } from "../api/client";
 import type { SessionOut } from "../api/types";
+import { StepProgress } from "./gauges";
 /** The five stages are a real sequence — documents feed the analysis, the
  *  analysis feeds the questions, the answers feed the scorecard — so numbering
  *  them encodes the dependency rather than decorating the list. */
@@ -110,6 +111,10 @@ export function Rail({ session }: { session: SessionOut | null }) {
           {session?.target_role ? (
             <p className="rail__role">{session.target_role}</p>
           ) : null}
+          <StepProgress
+            done={STAGES.filter((st) => isDone(st, session)).length}
+            total={STAGES.length}
+          />
           <SessionSwitcher currentId={Number(id)} />
         </div>
       ) : null}

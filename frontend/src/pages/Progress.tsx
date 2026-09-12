@@ -3,7 +3,8 @@ import { Link } from "react-router-dom";
 
 import { api } from "../api/client";
 import type { Progress as ProgressData } from "../api/types";
-import { DataTable, Delta, Ring, Sparkline, Stat, Trend } from "../components/charts";
+import { DataTable, Delta, Sparkline, Stat, Trend } from "../components/charts";
+import { ArcGauge } from "../components/gauges";
 import { Empty, ErrorBox, Head, Row, Spinner, toneForScore } from "../components/bits";
 
 function shortDate(iso: string): string {
@@ -60,7 +61,7 @@ export function Progress() {
       <Row margin={<span className="label">Where you are</span>}>
         <div className="statrow">
           {data.latest_readiness !== null ? (
-            <Ring value={data.latest_readiness} label="Latest readiness" />
+            <ArcGauge value={data.latest_readiness} band="Latest readiness" />
           ) : null}
           <div className="stats">
             <Stat

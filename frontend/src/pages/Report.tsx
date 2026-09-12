@@ -4,8 +4,9 @@ import { Link, useOutletContext } from "react-router-dom";
 import { api, ApiError } from "../api/client";
 import type { MatchReport, SessionOut, Suggestion } from "../api/types";
 import {
-  Chip, ErrorBox, EvidenceLine, Gauge, Head, Row, Spinner, Verdict,
+  Chip, ErrorBox, EvidenceLine, Head, Row, Spinner, Verdict,
 } from "../components/bits";
+import { ArcGauge } from "../components/gauges";
 import { RewriteCard } from "../components/RewriteCard";
 
 interface Ctx { session: SessionOut | null; refresh: () => Promise<void> }
@@ -79,9 +80,13 @@ export function Report() {
     <div className="sheet">
       <Head margin={<span className="label">Stage 2</span>}>
         <h1 className="display h1">Gap analysis</h1>
-        <Gauge value={report.overall_score} />
-        <p className="label" style={{ marginTop: "0.2rem" }}>{report.verdict}</p>
-        <p className="prose" style={{ marginTop: "1rem" }}>{report.summary}</p>
+        <div className="scorehead">
+          <ArcGauge value={report.overall_score} band={report.verdict}
+                    caption="of what the role asks for" />
+          <div>
+            <p className="prose scorehead__sum">{report.summary}</p>
+          </div>
+        </div>
         <div className="split" style={{ marginTop: "0.9rem" }}>
           <Chip tone="strong">{counts.strong ?? 0} evidenced</Chip>
           <Chip tone="partial">{counts.partial ?? 0} thin</Chip>
