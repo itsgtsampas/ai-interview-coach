@@ -619,18 +619,27 @@ quality, Format — with written justification, in the exact format of the semin
 
 ## 9. Frontend
 
-**Recommendation: React 19 + Vite + TypeScript + Tailwind + TanStack Query.**
+**Built: React 18 + Vite + TypeScript (strict), hand-written CSS, plain `fetch`.**
 
 Rationale: the assignment lists React first among UI options and grades the UI on
 "λειτουργικότητα, καθαρότητα, ευκολία χρήσης". This app has real UI state — multi-step
-workflow, background job polling, streaming evaluation text, an interview timer, a chat panel
+workflow, background job polling, streamed evaluation stages, an interview timer, a chat panel
 with a tool trace. Streamlit re-runs the whole script on every interaction and fights all four
-of those. The stated goal is also that this be usable in the real world, which rules out a
-notebook-grade UI.
+of those.
 
-Types are generated from the live OpenAPI schema with `openapi-typescript`, so the frontend
-cannot drift from the backend contract — which turns FastAPI's auto-docs from a demo feature
-into load-bearing infrastructure, and is worth one line in the documentation.
+**Three things this section originally proposed and the build did not use**, each for a
+reason that only became clear once the design rule existed:
+
+- **Tailwind.** The house rule is that colour means judgement (§16.6). Utility classes do not
+  conflict with that, but the component and chart libraries that usually come with Tailwind do —
+  every one ships a categorical palette. Hand-written CSS with design tokens keeps the rule
+  enforceable in one file.
+- **TanStack Query.** The app has four fetch patterns: load once, poll until ready, stream, and
+  submit. Each is a dozen lines in `api/client.ts` and `lib/sse.ts`. A cache layer would have
+  been more code to configure than to replace.
+- **`openapi-typescript`.** Types in `api/types.ts` are hand-written to mirror the FastAPI
+  schema. The generated route is better — it cannot drift — and is the first thing to change if
+  this grew. Recorded here as a known shortcut rather than presented as a decision.
 
 **Screens**
 
