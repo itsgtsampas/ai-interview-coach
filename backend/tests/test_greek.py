@@ -104,3 +104,34 @@ def test_an_invented_quote_is_still_rejected():
     """The tolerance must not let a fabrication through."""
     assert not verify_citation("Σχεδίασα ένα σύστημα Kubernetes για τη διαχείριση.", PASSAGES)
     assert locate_citation("Designed a Kubernetes cluster.", PASSAGES) is None
+
+
+# --- the exported PDF ------------------------------------------------------
+
+def test_the_pdf_labels_follow_the_documents_language():
+    """A Greek quote under an English heading reads as a mistake.
+
+    The export renders the CV's own sentences, so its fixed furniture -
+    COMPETENCIES, EVIDENCED, the footer - has to follow the content rather than
+    stay in whatever language the code was written in.
+    """
+    from app.services.pdf_export import BANDS_EL, CRITERIA_EL, LABELS
+
+    assert set(LABELS) == {"English", "Greek"}
+    assert set(LABELS["English"]) == set(LABELS["Greek"]), "label sets must match"
+    for key, value in LABELS["Greek"].items():
+        if key == "wordmark":
+            continue  # the product name is not translated
+        assert value != LABELS["English"][key], f"{key} was left in English"
+
+    # The model hands back bands and rubric dimensions in English, because the
+    # prompts name them literally. They behave as enums, like in the interface.
+    assert BANDS_EL["Interview ready"].startswith("Έτοιμος")
+    assert CRITERIA_EL["Trade-offs"] == "Συμβιβασμοί"
+
+
+def test_an_unknown_band_falls_through_untranslated():
+    """A model that invents a band must not produce a blank on the page."""
+    from app.services.pdf_export import BANDS_EL
+
+    assert BANDS_EL.get("Something new", "Something new") == "Something new"

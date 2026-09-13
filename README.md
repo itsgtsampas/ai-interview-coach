@@ -211,9 +211,9 @@ docs/
   `EMBEDDING_PROVIDER=openai` and re-indexing fixes it.
 - `create_all` builds the schema, with a helper that adds missing nullable columns on
   startup; a production deployment would use Alembic migrations.
-- The scorecard PDF renders with fpdf2's built-in Helvetica, which is Latin-1. Greek and
-  other non-Latin text becomes `?`. Dropping a TrueType font into
-  `backend/app/assets/fonts/` switches it to full Unicode with no code change.
+- Greek and English are supported end to end: documents, model output, interface and the
+  PDF export. A third language would need its own stopword list and a look at the
+  stemmer — the tokenizer and the folding are already script-agnostic.
 - Offline, the stub answers in about five milliseconds, so an SSE stream finishes before
   the browser paints and the streaming UI is not visible. Set `STUB_STREAM_DELAY_MS=18` to
   demonstrate the transport without an API key — it is a demo aid and defaults to `0`,

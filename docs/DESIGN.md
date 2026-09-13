@@ -1131,3 +1131,103 @@ recognising that migrating Java 8 to 21 evidences "solid knowledge of Java" —
 while every genuinely absent skill stayed absent. The grounding contract holds:
 every quote it produced appears verbatim in the CV, and it made no claim without
 one.
+
+---
+
+## 18. Greek
+
+The application is bilingual end to end. Four separate pieces had to change, and
+only one of them was where I expected.
+
+### 18.1 The lexical layer was Latin-only
+
+`_WORD` was `[A-Za-z]`, so from "Ανέπτυξα μικροϋπηρεσία διαχείρισης παραγγελιών
+σε Java 17" the pipeline saw `java` and nothing else. Retrieval, coverage and
+the pivot gate were all operating on whatever Latin technology names survived.
+
+Three changes, all confined to `textutil.py`: Greek and Greek Extended in the
+tokenizer; accent folding and final-sigma normalisation, because Greek marks
+stress on nearly every word and moves it under inflection; and a deliberately
+small suffix stripper, since the five-character prefix rule catches only about
+half of Greek inflection. The stripper removes one ending when four characters
+of stem remain and touches nothing outside the Greek block — an aggressive
+stemmer conflates unrelated words, and a false match here becomes a false
+citation.
+
+Greek stopwords mirror the English list's two jobs: grammar, and posting
+boilerplate. "Εμπειρία", "γνώση" and "άριστη" phrase a requirement and never
+evidence one.
+
+Measured on a Greek CV against a Greek posting. Before: the degree requirement
+was "evidenced" citing the candidate's *name*, unit testing and PostgreSQL came
+back as uncited claims, "Αγγλικά (C1)" was reported missing. After: every
+requirement the CV evidences is strong with a correct verbatim citation, and
+Kubernetes and Kafka stay missing. The score moved 80 → 85, but the citations
+moved far more, which is the part that matters.
+
+### 18.2 Telling the model the language, not asking it to infer one
+
+The first attempt added one shared rule to every prompt — *"write in the same
+language as the candidate's CV"* — and `gpt-4o-mini` ignored it completely. The
+rule was verifiably in the rendered prompt. An English system prompt anchors the
+reply to English harder than a trailing instruction can move it.
+
+What works is naming the language. `detect_language()` decides from the script
+the text is mostly written in, with a 15% threshold rather than a majority: a
+Greek CV is full of Latin technology names, and "Java, Spring Boot, PostgreSQL,
+Docker" in a skills section outweighs a short Greek summary. The instruction
+then reads "WRITE IN GREEK", and appears twice — opening the task and closing
+the format block — because once at the end of a long task was demonstrably not
+enough.
+
+All eight prompt versions were bumped, since all eight sets of instructions
+changed.
+
+### 18.3 Two categories of string that are not prose
+
+Readiness bands ("Interview ready") and rubric dimensions ("Correctness",
+"Trade-offs") come back from the model in English even under the language rule,
+because the prompts name them literally. They are enums, not prose, and are
+translated at the edges — `useBand()` and `useCriterion()` in the interface,
+`BANDS_EL` and `CRITERIA_EL` in the export — each falling through to the model's
+own wording if it invents one. Asking the model to translate them instead would
+make them unstable between runs and unusable as chart labels.
+
+### 18.4 The interface, and the export
+
+179 keys per locale in a typed dictionary: a key present in English and missing
+from Greek is a compile error rather than a blank on the page. No i18n library —
+two locales and flat strings do not need a message syntax.
+
+The interface language is deliberately independent of the model's. The model
+answers in the language of the documents; this setting controls only the chrome.
+A Greek CV can be reviewed through an English interface, because the CV is not
+the reader's to choose.
+
+The PDF export needed a Unicode face — fpdf2's built-in Helvetica is Latin-1, so
+a Greek scorecard rendered as question marks. DejaVu Sans is bundled; the
+licence is why that face rather than a system one, since macOS and Microsoft
+faces cannot be committed to a repository. Its fixed labels follow the language
+of the document it describes: a Greek quote under an English heading reads as a
+mistake.
+
+### 18.5 Two bugs Greek exposed that were never about Greek
+
+**A claim outliving its citation.** When `verify_citation` rejected a quote, the
+service dropped the quote but downgraded the status to "partial" — leaving a
+claim with nothing behind it. In English this almost never fired. In Greek it
+fired constantly, and it is now "missing", which is what the prompt itself
+instructs.
+
+**Citations failing on a full stop.** Models quote a clause and close it with a
+full stop where the source has a comma. The substring check rejected that,
+costing four correct verdicts in a single run. `locate_citation()` now ignores
+terminal punctuation and returns the *source's* own span, so the interface
+displays the document's characters rather than the model's retyping of them —
+which is a slightly stronger grounding guarantee than the one it replaced.
+
+**And one that was about streaming.** The streamed cover letter was storing the
+entire JSON envelope as the letter body: the stage's format block demands a JSON
+object, so streaming it streams the JSON. The offline double hid this by
+returning only the body text. The streaming path now renders a prose format
+block instead.

@@ -115,7 +115,8 @@ Legend: **✅ built and exercised** · **🟡 partial** · **⬜ not started**
 | CV bullet rewrites per gap | ✅ `components/RewriteCard.tsx` — placeholders rendered as unfinished |
 | Cover letter with tone control | ✅ `pages/Letter.tsx` |
 | Cross-session progress with charts | ✅ `pages/Progress.tsx`, `components/charts.tsx` — hand-rolled SVG |
-| WCAG AA contrast on every text node | ✅ Audited at rendered size across all 7 pages; two palette tokens darkened (DESIGN §16.8) |
+| WCAG AA contrast on every text node | ✅ Audited at rendered size across all 7 pages; two palette tokens darkened (DESIGN §16.9) |
+| Greek and English throughout | ✅ Documents, retrieval, model output, interface (179 keys/locale) and PDF export |
 | Types generated from OpenAPI (`openapi-typescript`) | 🟡 Hand-written to mirror the schema |
 
 ## 6. Remaining deliverables

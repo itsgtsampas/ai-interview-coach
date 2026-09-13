@@ -7,6 +7,21 @@ format, each scored 1–5 with a justification.
 The exercise scored three prompts. This project has eight, all in production,
 all carrying a version that is stamped on every result they produce.
 
+**Every version moved once more after this was written.** Adding the language
+rule (see below) changed all eight sets of instructions, so all eight were
+bumped together — `extract_requirements` to v3, `analyse_match` to v4,
+`evaluate_answer` to v5, and the rest by one. That also closed the
+`rewrite_bullet` gap recorded in §4.7: its text had changed without its version
+following, and it is now v2.
+
+**A ninth thing every prompt now carries.** `blocks.py` emits a language
+instruction naming the language outright — "WRITE IN GREEK" — because the first
+attempt, which asked the model to infer it from the CV, was ignored completely.
+An English system prompt anchors the reply to English harder than a trailing
+instruction can move it. The language is detected server-side from the script
+the documents are written in, and the instruction appears twice: opening the
+task and closing the format block.
+
 **What the version numbers mean, precisely.** Six of the eight were authored at
 their current version and committed that way: the number records how many
 formulations the prompt went through while it was being written, but those
@@ -95,14 +110,14 @@ be compared on the same golden set.
 
 | # | Stage | Version | Technique | Cla | Ctx | Per | Out | Fmt |
 |---|---|---|---|---|---|---|---|---|
-| 1 | `extract_requirements` | v2 | Zero-shot | 5 | 4 | 5 | 4 | 5 |
-| 2 | `analyse_match` | v3 | Chain-of-thought | 5 | 5 | 5 | 5 | 5 |
-| 3 | `generate_questions` | v2 | Few-shot (3 exemplars) | 5 | 5 | 5 | 4 | 5 |
-| 4 | `evaluate_answer` | v4 | Few-shot anchors + CoT | 5 | 5 | 5 | 4 | 5 |
-| 5 | `build_scorecard` | v2 | Prompt chaining | 5 | 4 | 4 | 4 | 5 |
-| 6 | `coach_agent` | v1 | ReAct + tool calling | 4 | 4 | 4 | 3 | 2 |
-| 7 | `rewrite_bullet` | v1 | Few-shot + negative example | 5 | 4 | 5 | 3 | 5 |
-| 8 | `cover_letter` | v1 | Chaining + structural grounding | 4 | 5 | 5 | 3 | 4 |
+| 1 | `extract_requirements` | v3 | Zero-shot | 5 | 4 | 5 | 4 | 5 |
+| 2 | `analyse_match` | v4 | Chain-of-thought | 5 | 5 | 5 | 5 | 5 |
+| 3 | `generate_questions` | v3 | Few-shot (3 exemplars) | 5 | 5 | 5 | 4 | 5 |
+| 4 | `evaluate_answer` | v5 | Few-shot anchors + CoT | 5 | 5 | 5 | 4 | 5 |
+| 5 | `build_scorecard` | v3 | Prompt chaining | 5 | 4 | 4 | 4 | 5 |
+| 6 | `coach_agent` | v2 | ReAct + tool calling | 4 | 4 | 4 | 3 | 2 |
+| 7 | `rewrite_bullet` | v2 | Few-shot + negative example | 5 | 4 | 5 | 3 | 5 |
+| 8 | `cover_letter` | v2 | Chaining + structural grounding | 4 | 5 | 5 | 3 | 4 |
 
 The three weakest entries are the three still at v1. That is not a coincidence —
 they are the ones that have had the least measurement pointed at them — and §5
@@ -112,7 +127,7 @@ says what I would change.
 
 ## 4. The prompts
 
-### 4.1 `extract_requirements.v2` — zero-shot
+### 4.1 `extract_requirements.v3` — zero-shot
 
 **Persona.** *A technical recruiter who has screened several thousand engineering
 job descriptions, and separates what a role actually requires from the
@@ -147,7 +162,7 @@ prompt, so the version correctly stayed put.
 
 ---
 
-### 4.2 `analyse_match.v3` — chain-of-thought
+### 4.2 `analyse_match.v4` — chain-of-thought
 
 The centre of the product, and the most carefully written.
 
@@ -195,7 +210,7 @@ table in [evaluation.md](evaluation.md) measures.
 
 ---
 
-### 4.3 `generate_questions.v2` — few-shot
+### 4.3 `generate_questions.v3` — few-shot
 
 **Persona.** *The hiring manager who will actually run this interview. Asks
 questions specific to this candidate's file, not questions they could ask
@@ -222,7 +237,7 @@ accusing, and that is far easier to show than to describe.
 
 ---
 
-### 4.4 `evaluate_answer.v4` — few-shot anchors + chain-of-thought
+### 4.4 `evaluate_answer.v5` — few-shot anchors + chain-of-thought
 
 **Persona.** *An interview coach who has debriefed hundreds of real loops.
 Constructive, but does not inflate: a 3 means adequate.*
@@ -251,7 +266,7 @@ reflects four formulations during authoring, of which only the last is committed
 
 ---
 
-### 4.5 `build_scorecard.v2` — prompt chaining
+### 4.5 `build_scorecard.v3` — prompt chaining
 
 **Persona.** *The interviewer writing the debrief note after a loop. Direct
 about what would stop this candidate getting an offer.*
@@ -301,7 +316,7 @@ docstring.
 
 ---
 
-### 4.6 `coach_agent.v1` — ReAct + tool calling
+### 4.6 `coach_agent.v2` — ReAct + tool calling
 
 **Persona.** *The candidate's interview coach, with access to their file through
 tools. Never guesses at what the CV says — looks it up.*
@@ -328,7 +343,7 @@ rather than presented as a finished design.
 
 ---
 
-### 4.7 `rewrite_bullet.v1` — few-shot with a negative example
+### 4.7 `rewrite_bullet.v2` — few-shot with a negative example
 
 The most dangerous prompt in the application, and the one whose design is most
 constrained by that.
@@ -368,14 +383,14 @@ between a user and a fabricated claim — but the score belongs to the prompt.
 **A process failure worth recording.** The prompt text genuinely changed in
 commit `7186aa5` and the version was **not** bumped: it still reads v1. So
 suggestions stored before and after that commit are both stamped
-`rewrite_bullet.v1` despite coming from materially different instructions, and
+`rewrite_bullet.v2` despite coming from materially different instructions, and
 the traceability the registry is supposed to provide is broken for this stage.
 `build_scorecard` was bumped correctly in the same commit; this one was missed.
 It should be v2.
 
 ---
 
-### 4.8 `cover_letter.v1` — chaining with structural grounding
+### 4.8 `cover_letter.v2` — chaining with structural grounding
 
 **Persona.** *The candidate, writing to a hiring manager who has thirty seconds.
 First person, plain British English, never claims anything they cannot point at.*
