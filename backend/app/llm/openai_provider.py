@@ -176,6 +176,11 @@ class OpenAIProvider:
             ],
         })
         msg = data["choices"][0]["message"]
+        usage = data.get("usage", {})
+        used = {
+            "prompt_tokens": usage.get("prompt_tokens", 0),
+            "completion_tokens": usage.get("completion_tokens", 0),
+        }
         calls = msg.get("tool_calls") or []
         if calls:
             call = calls[0]["function"]
@@ -183,6 +188,7 @@ class OpenAIProvider:
                 thought=msg.get("content") or f"Calling {call['name']}.",
                 tool=call["name"],
                 tool_input=json.loads(call.get("arguments") or "{}"),
+                **used,
             )
         return AgentStep(thought="Answering from gathered context.",
-                         final_answer=msg.get("content", ""))
+                         final_answer=msg.get("content", ""), **used)

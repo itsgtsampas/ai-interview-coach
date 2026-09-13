@@ -14,7 +14,9 @@ from sqlmodel import Session
 
 from app.agents.tools import build_tools
 from app.llm.base import AgentStep
+from app.config import get_settings
 from app.llm.provider import get_llm_provider
+from app.llm.structured import check_budget
 from app.llm.tokens import estimate_cost, estimate_tokens
 from app.models import LLMCall
 from app.prompts import coach_agent
@@ -36,9 +38,18 @@ def ask(message: str, *, user_id: int, session_id: int, db: Session) -> CoachRes
     history: list[AgentStep] = []
     answer = "I could not gather enough information to answer that."
     started = time.perf_counter()
+    prompt_tokens = completion_tokens = 0
 
     for _ in range(MAX_ITERATIONS):
+        # This loop is the only place in the application that reaches a provider
+        # without going through complete_structured, which means it is also the
+        # only place the spend ceiling would not be enforced — and it is the
+        # hungriest stage there is, making up to MAX_ITERATIONS calls per
+        # question. Checked every iteration, not just once on entry.
+        check_budget(db)
         step = provider.plan_step(prompt, [t.spec for t in tools.values()], history)
+        prompt_tokens += step.prompt_tokens
+        completion_tokens += step.completion_tokens
         if step.final_answer:
             answer = step.final_answer
             history.append(step)
@@ -55,15 +66,28 @@ def ask(message: str, *, user_id: int, session_id: int, db: Session) -> CoachRes
                 observation=f"No such tool: {step.tool}",
             ))
 
+    # Bill the model that actually served the loop. This previously recorded
+    # model="<provider>:agent" — which is in no pricing table — and passed the
+    # literal string "stub" to estimate_cost, so every agent call on any provider
+    # was recorded as free. Token counts were the initial prompt plus the final
+    # answer, ignoring every tool-call round trip in between.
+    model = (
+        f"stub:{coach_agent.VERSION}" if provider.name == "stub"
+        else get_settings().openai_chat_model_large
+    )
+    if not prompt_tokens:  # the stub reports no usage
+        prompt_tokens = estimate_tokens(prompt.system + prompt.user)
+        completion_tokens = estimate_tokens(answer)
+
     db.add(LLMCall(
         session_id=session_id,
         stage="coach_agent",
         provider=provider.name,
-        model=f"{provider.name}:agent",
+        model=model,
         prompt_version=coach_agent.VERSION,
-        prompt_tokens=estimate_tokens(prompt.system + prompt.user),
-        completion_tokens=estimate_tokens(answer),
-        cost_usd=estimate_cost("stub", 0, 0),
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        cost_usd=estimate_cost(model, prompt_tokens, completion_tokens),
         latency_ms=round((time.perf_counter() - started) * 1000, 2),
         status="ok",
     ))

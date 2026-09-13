@@ -7,7 +7,7 @@ and they are the validation target for every response regardless of provider.
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 # --- Stage 1: requirement extraction --------------------------------------
@@ -39,6 +39,15 @@ class MatchItemOut(BaseModel):
 
 class MatchReportOut(BaseModel):
     overall_score: int = Field(ge=0, le=100)
+
+    # These scores are weighted averages, so a model returns 67.6 as often as 68.
+    # Rejecting that spent a whole repair round trip to be told the same number
+    # without its decimal. Rounding here keeps the stored contract an integer
+    # while accepting the shape the arithmetic actually produces.
+    @field_validator("overall_score", mode="before")
+    @classmethod
+    def _round_score(cls, v):
+        return round(v) if isinstance(v, float) else v
     verdict: str
     summary: str
     items: list[MatchItemOut]
@@ -85,6 +94,11 @@ class ActionItem(BaseModel):
 
 class ScorecardOut(BaseModel):
     readiness_score: int = Field(ge=0, le=100)
+
+    @field_validator("readiness_score", mode="before")
+    @classmethod
+    def _round_score(cls, v):
+        return round(v) if isinstance(v, float) else v
     readiness_band: str
     summary: str
     competencies: dict[str, float] = Field(default_factory=dict)

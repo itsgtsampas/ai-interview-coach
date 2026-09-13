@@ -3,6 +3,18 @@
 Technique: PROMPT CHAINING. This stage consumes only the structured outputs of
 stages 1-3; it never re-reads the CV. That keeps the chain auditable — every
 number here traces to a stored row.
+
+Version history
+---------------
+v1  First version. Said "average each rubric dimension into competencies" and
+    left the dimension names implicit.
+v2  gpt-4o-mini read that as licence to invent its own taxonomy: five scored
+    dimensions (Correctness, Depth, Trade-offs, Communication, Relevance) came
+    back aggregated into two, {"technical": 1.6, "communication": 3.0}. The
+    numbers were defensible but they were not the ones the rubric produced, they
+    were not comparable between sessions, and the competency chart lost three of
+    its five bars. v2 names the constraint explicitly: use the criterion_scores
+    keys, all of them, spelled as given.
 """
 
 import json
@@ -10,7 +22,7 @@ import json
 from app.llm.base import RenderedPrompt
 from app.prompts.blocks import json_only, pctf
 
-VERSION = "build_scorecard.v1"
+VERSION = "build_scorecard.v2"
 
 PERSONA = (
     "You are the interviewer writing the debrief note after a loop. You are "
@@ -27,7 +39,12 @@ TASK = """
    score 60%. If there are no answers yet, use the CV match alone.
 2. Assign a band: 75+ "Interview ready", 55-74 "Nearly ready",
    35-54 "Needs work", below 35 "Not ready yet".
-3. Average each rubric dimension across all answers into competencies.
+3. Average each rubric dimension across all answers into competencies. Use the
+   dimension names EXACTLY as they appear in the `criterion_scores` keys of the
+   scored answers — every one of them, spelled the same way. Do not invent
+   categories, do not merge several dimensions into one, and do not rename them.
+   If the answers were scored on Correctness, Depth, Trade-offs, Communication
+   and Relevance, `competencies` has those five keys and no others.
 4. List strengths and gaps, drawing on both the CV analysis and the answer scores.
 5. Write action items, highest priority first. A missing must_have requirement is
    always high priority. Each needs a why (what it costs them) and a how (the

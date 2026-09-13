@@ -49,6 +49,10 @@ class AgentStep:
     tool_input: dict[str, Any] | None = None
     observation: str | None = None
     final_answer: str | None = None
+    # Usage for this single iteration. The agent loop is the one stage that does
+    # not go through complete_structured, so without these its cost is invisible.
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
 
 
 class LLMProvider(Protocol):

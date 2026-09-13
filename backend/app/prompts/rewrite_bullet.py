@@ -46,8 +46,15 @@ TASK = """
 3. Every fact you do not have must appear as a [square-bracket placeholder]
    naming what the candidate must supply, e.g. [number of services],
    [latency before -> after]. Never guess a number. Never invent a project.
-4. In `why`, state in one sentence what this bullet proves to the screener.
-5. In `if_you_cannot`, give the honest alternative for a candidate who has no
+4. If `CV evidence` is "none", the WORK ITSELF is a fact you do not have, so it
+   must be a placeholder too — not only the outcome. "Designed and implemented a
+   document storage solution using Couchbase, achieving [number]% faster reads"
+   is a REJECTED answer: it states as done a thing this candidate has never
+   done, and the placeholder on the outcome does not rescue it. Write
+   "Built [what you built] on Couchbase, [outcome]" instead. A bullet with a
+   placeholder only in its outcome is the failure this rule exists to stop.
+5. In `why`, state in one sentence what this bullet proves to the screener.
+6. In `if_you_cannot`, give the honest alternative for a candidate who has no
    such experience: the smallest real thing that would earn this bullet.
 """
 

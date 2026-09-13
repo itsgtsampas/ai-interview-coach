@@ -20,7 +20,14 @@ from app.rag.retriever import retrieve
 # A bullet with no placeholders and no evidence behind it is a fabricated claim
 # wearing a suggestion's clothes. See prompts/rewrite_bullet.py for why this is
 # the failure mode worth a guard rather than a code review comment.
-MIN_PLACEHOLDERS_WHEN_UNEVIDENCED = 1
+#
+# One is not enough, learned the hard way. Against gpt-4o-mini this produced
+# "Designed and implemented a document storage solution using Couchbase,
+# achieving a [number]% increase in data retrieval speed" for a CV with no
+# Couchbase anywhere: the outcome was parameterised and the *work* was asserted
+# as done. That passed a one-placeholder check while being exactly the claim the
+# stage exists to prevent. Two forces the action to be a placeholder as well.
+MIN_PLACEHOLDERS_WHEN_UNEVIDENCED = 2
 
 
 def _owned_item(item_id: int, session: InterviewSession, db: Session) -> MatchItem:
@@ -71,11 +78,14 @@ def suggest(item_id: int, session: InterviewSession, db: Session) -> CvSuggestio
         temperature=0.4,
     )
 
-    if not item.evidence_quote and len(out.placeholders) < MIN_PLACEHOLDERS_WHEN_UNEVIDENCED:
-        raise StageNotReady(
-            "The suggestion came back as a finished claim rather than a template, and "
-            "your CV has no evidence for this requirement. Refusing to show it."
-        )
+    if not item.evidence_quote:
+        declared = [p for p in out.placeholders if p in out.bullet]
+        if len(declared) < MIN_PLACEHOLDERS_WHEN_UNEVIDENCED:
+            raise StageNotReady(
+                "The suggestion came back as a finished claim rather than a template, "
+                "and your CV has no evidence for this requirement. Refusing to show it.",
+                {"bullet": out.bullet, "placeholders_in_bullet": declared},
+            )
 
     row = CvSuggestion(
         session_id=session.id or 0,
