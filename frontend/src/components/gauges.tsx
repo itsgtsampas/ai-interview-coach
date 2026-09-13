@@ -1,13 +1,9 @@
 /** Score display.
  *
- *  A readiness score is a single KPI against thresholds, which is the one case
- *  a gauge is the right chart rather than an ornament. The thresholds are drawn
- *  and *labelled* on the dial: the guidance for this chart type is explicit that
- *  colour zones alone are not sufficient, and it is also just the honest thing —
- *  the reader can see that 56 sits in "nearly", without decoding an amber.
- *
- *  The house rule still holds. The dial track, the ticks and the labels are
- *  achromatic; the only coloured element is the value arc, which is a verdict.
+ *  A single KPI against thresholds is the one case a gauge beats a bar. The
+ *  thresholds are drawn and labelled on the dial so the band is readable
+ *  without decoding the colour. Track, ticks and labels stay achromatic; the
+ *  value arc is the only coloured element.
  */
 
 import { useId } from "react";
@@ -61,8 +57,7 @@ export function ArcGauge({
   const pct = Math.max(0, Math.min(1, value / max));
   const tone = toneForScore(value, max);
 
-  // Before mount the arc is empty, so the transition has somewhere to travel
-  // from. Under reduced motion it is drawn at its final length immediately.
+  // Empty before mount so the transition has somewhere to travel from.
   const drawn = reduced || mounted ? track * pct : 0;
 
   return (
@@ -71,9 +66,7 @@ export function ArcGauge({
         {`${Math.round(value)} out of ${max}${band ? `, ${band}` : ""}`}
       </figcaption>
 
-      {/* The dial is a fixed square; the labels below it flow, so a long band
-          name wraps instead of escaping the figure and landing on whatever
-          follows it. */}
+      {/* Fixed square dial, flowing labels, so a long band name wraps. */}
       <div className="arc__dial" style={{ width: size, height: size }}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
         <g transform={`rotate(${START} ${cx} ${cy})`}>
@@ -94,8 +87,7 @@ export function ArcGauge({
           />
         </g>
 
-        {/* Threshold ticks, drawn across the band so they read as divisions of
-            the dial rather than as marks sitting on top of it. */}
+        {/* Drawn across the band so they read as divisions of the dial. */}
         {THRESHOLDS.map((t) => {
           const deg = START + SWEEP * (t.at / max);
           const inner = polar(cx, cy, r - stroke / 2 - 1, deg);
@@ -134,14 +126,9 @@ export function ArcGauge({
   );
 }
 
-/**
- * A labelled bar with an optional benchmark marker — a bullet chart, which is
- * the compact form of "value against a target" and the right shape for a column
- * of competencies.
+/** A bullet chart: value against a target, in one row.
  *
- * `index` staggers the fill so the column reads top to bottom on arrival
- * instead of snapping in as a block.
- */
+ *  `index` staggers the fill so a column reads top to bottom on arrival. */
 export function BulletBar({
   label,
   value,
@@ -152,8 +139,7 @@ export function BulletBar({
   label: string;
   value: number;
   max?: number;
-  /** Where "good enough" sits on this scale. Drawn as a marker, labelled once
-   *  in the caption beside the group rather than repeated on every row. */
+  /** Where "good enough" sits. Labelled once in the caption, not per row. */
   benchmark?: number;
   index?: number;
 }) {
@@ -179,8 +165,7 @@ export function BulletBar({
         aria-valuemax={max}
         aria-label={`${label}: ${value.toFixed(1)} out of ${max}`}
       >
-        {/* Scaled, not resized: animating width lays out the page on every
-            frame. The clip keeps the rounded ends from stretching with it. */}
+        {/* Scaled, not resized: animating width lays out every frame. */}
         <span className="bullet__clip">
           <span
             className="bullet__fill"
@@ -202,12 +187,9 @@ export function BulletBar({
   );
 }
 
-/**
- * Linear progress through a fixed sequence — how far this application has got.
+/** Linear progress through the stage sequence.
  *
- * Linear easing, deliberately: this is steady progress through discrete steps,
- * not an element arriving on screen, and the guidance is to let those differ.
- */
+ *  Linear easing: steady progress, not an element arriving. */
 export function StepProgress({
   done,
   total,

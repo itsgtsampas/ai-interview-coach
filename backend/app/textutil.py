@@ -6,9 +6,8 @@ import re
 _WORD = re.compile(r"[A-Za-z][A-Za-z0-9+#.\-]*(?:/[A-Za-z0-9+#.\-]+)+|[A-Za-z][A-Za-z0-9+#.\-]{1,}")
 _SENT_SPLIT = re.compile(r"(?<=[.!?;])\s+")
 _ENDS_SENTENCE = re.compile(r"[.!?:;]$")
-# A line ending on any of these cannot be the end of a thought, so the next line
-# is a continuation even if it starts with a capital ("...experience with" /
-# "Python and FastAPI").
+# A line ending on any of these continues onto the next, even if that line
+# starts with a capital.
 _DANGLING_END = re.compile(
     r"(?:[,;:\-\u2013\u2014]|\b(?:and|or|with|of|the|a|an|in|to|for|on|at|by|from"
     r"|that|which|including|using|such as))\s*$",
@@ -170,11 +169,8 @@ def _matches(keyword: str, haystack_tokens: set[str]) -> bool:
         return True
     if SYNONYMS.get(keyword, set()) & haystack_tokens:
         return True
-    # _WORD deliberately keeps slash-compounds whole so that "CI/CD" survives as
-    # one term. The cost is that a CV reading "Java/Spring Boot" hides both names
-    # inside the token "java/spring", and a search for "java" finds nothing. The
-    # parts are matched here rather than at tokenisation, so IDF weights and
-    # coverage denominators are unaffected.
+    # _WORD keeps slash-compounds whole, so "java" must still match the token
+    # "java/spring". Done here, not at tokenisation, to leave IDF weights alone.
     if any("/" in h and keyword in h.split("/") for h in haystack_tokens):
         return True
     # Partial credit for morphological variants: containerise / containerisation.
@@ -190,29 +186,23 @@ def salient_terms(text: str) -> list[str]:
     "preferably AWS", "preferably" is the rarer word and the meaningless one.
     """
     out: list[str] = []
-    # Every word counts. Skipping the first one — on the theory that it opens a
-    # sentence — silently erased the technology from requirements that are just
-    # its name: "Java", "Docker", "Spring Framework". Sentence openers are
-    # handled by STOPWORDS instead, which is where that judgement belongs.
+    # Every word counts, including the first: a requirement is often just the
+    # technology's name. Sentence openers are handled by STOPWORDS.
     for word in text.split():
         cleaned = word.strip("(),;:/\"'").rstrip(".")
         if len(cleaned) >= 2 and any(c.isupper() for c in cleaned):
             for tok in tokens(cleaned):
                 if len(tok) < 2 or tok in STOPWORDS:
                     continue
-                # "Hands-on" and "Full-stack" are phrasing, not technologies.
-                # A hyphenated word built from a stopword is one too, and must
-                # not become the term a requirement hinges on.
+                # "Hands-on", "Full-stack": phrasing, not technologies.
                 if any(part in STOPWORDS for part in tok.split("-")):
                     continue
                 out.append(tok)
     return list(dict.fromkeys(out))
 
 
-# Where one requirement stops naming one thing and starts naming another:
-# punctuation, coordinators, and the prepositions that introduce a new noun
-# phrase. A spaced slash only — a bare one is inside a token ("CI/CD", "REST/SOAP"),
-# which _WORD deliberately keeps whole.
+# Splits one requirement into the separate things it names. Spaced slash only:
+# a bare one is inside a token ("CI/CD"), which _WORD keeps whole.
 _COORDINATOR = re.compile(
     r"[,;()\[\]]|\s+/\s+|\b(?:or|and|in|of|with|for|to|using|from|across)\b",
     re.I,
@@ -220,22 +210,15 @@ _COORDINATOR = re.compile(
 
 
 def _coordinate_groups(text: str) -> list[str]:
-    """Split a requirement into the separate things it names.
-
-    "Solid knowledge of Java (17+), the JVM ecosystem and object-oriented design"
-    names three things, not one. Treating it as one phrase is what makes the gate
-    below demand every term at once.
-    """
+    """Split a requirement into the separate things it names."""
     return [part.strip() for part in _COORDINATOR.split(text) if part and part.strip()]
 
 
 def decisive_hit(needle: str, haystack: str, idf: dict[str, float]) -> bool:
-    """Did the haystack actually contain the decisive term of something named?
+    """Whether a decisive term was actually matched.
 
-    `pivot_gate` returns True in two very different situations: a decisive term
-    was found, or the requirement named nothing distinctive so there was no gate
-    to apply. Callers that want to treat a match as positive evidence need to
-    tell those apart, and this is the narrower question.
+    Narrower than `pivot_gate`, which also returns True when the requirement
+    named nothing distinctive and there was no gate to apply.
     """
     groups = [g for g in (_coordinate_groups(needle) or [needle]) if salient_terms(g)]
     if not groups:
@@ -249,24 +232,15 @@ def decisive_hit(needle: str, haystack: str, idf: dict[str, float]) -> bool:
 
 
 def pivot_gate(needle: str, haystack: str, idf: dict[str, float]) -> bool:
-    """Does the haystack contain the decisive term of anything the requirement names?
+    """Whether the CV evidences the decisive term of anything the requirement names.
 
-    The gate exists so that "Familiarity with GraphQL APIs" is not evidenced by a
-    CV that only mentions APIs: within a compound noun, the distinctive modifier
-    is mandatory and the generic head is not.
+    Within a compound noun the distinctive modifier is mandatory and the generic
+    head is not, so "GraphQL APIs" is not evidenced by a CV with only REST APIs.
+    Asked per coordinate group rather than once over the whole sentence: IDF is
+    built from the CV, so an absent term carries maximum weight and a single
+    decisive term would always be the one the CV lacks.
 
-    But it must ask that question per *thing named*, not once over the whole
-    sentence. IDF here is built from the retrieved CV passages, so a term the CV
-    never mentions carries the maximum weight — meaning a single decisive term
-    chosen across the whole requirement is biased towards the one term the CV
-    lacks. "Solid knowledge of Java (17+), the JVM ecosystem..." then hinges on
-    JVM and reports a Java CV as having no Java, which is the precise opposite of
-    what this gate is for.
-
-    So: split into coordinate groups, apply the compound rule inside each, and
-    pass if any group is evidenced. How *completely* the requirement is met is
-    not this function's job — weighted_coverage already measures that, and a CV
-    with Java but not the JVM ecosystem lands on "partial", which is correct.
+    How completely the requirement is met is weighted_coverage's job, not this.
     """
     groups = [g for g in (_coordinate_groups(needle) or [needle]) if salient_terms(g)]
     if not groups:

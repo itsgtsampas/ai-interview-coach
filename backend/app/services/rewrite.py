@@ -17,16 +17,9 @@ from app.models import CvSuggestion, InterviewSession, MatchItem, MatchReport
 from app.prompts import rewrite_bullet
 from app.rag.retriever import retrieve
 
-# A bullet with no placeholders and no evidence behind it is a fabricated claim
-# wearing a suggestion's clothes. See prompts/rewrite_bullet.py for why this is
-# the failure mode worth a guard rather than a code review comment.
-#
-# One is not enough, learned the hard way. Against gpt-4o-mini this produced
-# "Designed and implemented a document storage solution using Couchbase,
-# achieving a [number]% increase in data retrieval speed" for a CV with no
-# Couchbase anywhere: the outcome was parameterised and the *work* was asserted
-# as done. That passed a one-placeholder check while being exactly the claim the
-# stage exists to prevent. Two forces the action to be a placeholder as well.
+# Without evidence, a bullet with too few placeholders is a fabricated claim.
+# Two rather than one: with one, models parameterise the outcome and assert the
+# work itself as done. See prompts/rewrite_bullet.py.
 MIN_PLACEHOLDERS_WHEN_UNEVIDENCED = 2
 
 

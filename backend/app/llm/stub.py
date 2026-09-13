@@ -336,10 +336,8 @@ class StubLLMProvider:
                 item_bucket = bucket
             found.append((cleaned, item_bucket))
 
-        # Fallback for postings with no recognisable section heading: take every
-        # substantive line outside the sections we know to be boilerplate.
-        # Returning a generic placeholder instead — the previous behaviour —
-        # produced a flawless score against a requirement nobody had stated.
+        # Fallback for postings with no recognisable heading: every substantive
+        # line outside the known boilerplate sections.
         if not found:
             skipping = False
             for raw in jd_text.splitlines():
@@ -404,16 +402,9 @@ class StubLLMProvider:
             best_cov = 0.0
             best_quote = ""
             pivot_present = False
-            # Score on the single best sentence rather than the whole section: a
-            # long section can accumulate coverage from unrelated lines, which
-            # would credit the candidate for evidence no sentence actually gives.
-            # Prefer a sentence carrying the decisive term over a merely wordy one.
-            # Rank on evidence first, then reject bare fragments. A skills-list
-            # entry and a sentence describing the work cover the requirement
-            # equally, but "Spring Boot" is a weaker citation than the sentence
-            # saying what was built with it. The preference is only strong
-            # enough to break that tie: among real sentences, retrieval order
-            # decides, so the most relevant passage still wins.
+            # Score the best single sentence, not the section: a long section
+            # accumulates coverage from unrelated lines. Rank on evidence first,
+            # then prefer a described achievement over a bare skills-list entry.
             best_rank: tuple = (False, 0.0, False)
             decisive_found = False
             for c in cands:
@@ -424,26 +415,13 @@ class StubLLMProvider:
                     best_cov, best, best_quote, pivot_present = cov, c, quote, has_pivot
                     decisive_found = decisive
 
-            # The distinctive term must be present. Without this gate,
-            # "Familiarity with GraphQL APIs" scores as partial against any CV
-            # that mentions APIs at all.
-            # Thresholds calibrated with evals/run.py over the full golden set,
-            # not by eye on one example. A sweep showed a flat optimum between
-            # 0.20 and 0.25 (0.806 exact accuracy); 0.30 — the value picked by
-            # hand against the backend pair alone — scored 0.710.
+            # Thresholds calibrated against the golden set; see docs/evaluation.md.
             if best is not None and pivot_present and best_cov >= 0.22:
                 status, conf = "strong", min(0.95, 0.45 + best_cov)
+            # A decisive term that was found is evidence even when coverage is
+            # low: unseen terms carry maximum weight, so a multi-part requirement
+            # sinks below the threshold however well it evidences its main part.
             elif best is not None and pivot_present and (best_cov >= 0.10 or decisive_found):
-                # A decisive term that was actually found IS evidence, whatever
-                # the coverage arithmetic says. Weighted coverage gives every
-                # term the corpus has never seen the maximum weight, so a
-                # requirement listing several facets the CV lacks is dragged
-                # below the threshold however strongly it evidences the main
-                # one: "Solid knowledge of Java (17+), the JVM ecosystem and
-                # object-oriented design" scored 0.0965 against a CV that
-                # migrated Java 8 to 21. Reporting that as "no evidence of Java"
-                # is the failure this branch exists to prevent. It is still only
-                # "partial" — the other facets genuinely are unevidenced.
                 status, conf = "partial", 0.3 + best_cov
             else:
                 status, conf = "missing", max(0.10, best_cov / 2)
@@ -499,10 +477,8 @@ class StubLLMProvider:
                 "evidence_section": section,
             })
 
-        # Behavioural requirements are excluded: no CV can evidence them, so
-        # counting them as missing would mark the candidate down for a property
-        # of the medium rather than of their experience. They are surfaced as
-        # interview questions instead.
+        # Behavioural requirements are excluded from the score — no CV can
+        # evidence them — and become interview questions instead.
         weights = {"strong": 1.0, "partial": 0.5, "missing": 0.0}
         scored = [i for i in items if i["kind"] == "evidenceable"]
         total = weight_sum = 0.0
@@ -774,9 +750,8 @@ class StubLLMProvider:
         }
 
     # -- stage 6: CV bullet rewrite -----------------------------------------
-    #
-    # Verbs are chosen from the requirement itself where the posting used one,
-    # because "Maintained" and "Designed" are not interchangeable to a screener.
+    # The verb comes from the requirement: "Maintained" and "Designed" are not
+    # interchangeable to a screener.
     _VERB_FOR = [
         (("design", "architect", "model"), "Designed"),
         (("build", "develop", "implement", "create", "deliver"), "Built"),
@@ -989,12 +964,9 @@ class StubLLMProvider:
             "claims_used": used,
         }
 
-    # Postings phrase requirements as noun phrases about experience
-    # ("Proven experience designing X"). Spliced into a sentence that already
-    # supplies the verb, the result is "worked directly on experience with X".
-    # Stripping the lead-in leaves the thing itself.
-    # The adjective group repeats: "Strong commercial experience with ..." stacks
-    # two before the noun, and postings stack three.
+    # Strips the "proven experience with" lead-in, which otherwise splices into
+    # a sentence that already has a verb. The adjective group repeats, since
+    # postings stack up to three before the noun.
     _REQ_LEAD_IN = re.compile(
         r"^(?:(?:strong|solid|proven|demonstrable|deep|extensive|hands[- ]on|"
         r"production|commercial|significant|excellent|good)\s+){0,3}"

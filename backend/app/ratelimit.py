@@ -1,18 +1,10 @@
 """Per-caller request ceilings.
 
-Three endpoint groups need a ceiling, for three different reasons:
+Three groups, three reasons: an uncapped login is a brute-force target, every
+generate call costs money, and uploads fill the disk and the vector store.
 
-* ``auth``     - an unlimited login endpoint is an open brute-force target.
-* ``generate`` - every call here reaches a model. With a real provider
-                 configured that is money, so an accidental loop in the client
-                 (or a bored visitor) spends it.
-* ``upload``   - PDFs land on disk and in the vector store; unbounded uploads
-                 fill both.
-
-Keying: authenticated callers are limited by user id, so one tenant cannot
-exhaust another's budget and a shared NAT address is not a shared ceiling.
-Anonymous callers fall back to the client address, which is all we have before
-a token exists.
+Authenticated callers are keyed by user id so one tenant cannot exhaust
+another's budget; anonymous callers fall back to the client address.
 """
 
 from collections.abc import Callable
@@ -34,12 +26,7 @@ UPLOAD_LIMIT = "40/hour"
 
 
 def caller_key(request: Request) -> str:
-    """User id when we have one, client address otherwise.
-
-    ``request.state.user_id`` is set by the auth dependency. It is absent on
-    unauthenticated routes and on requests that fail authentication, which is
-    exactly when the address is the right key.
-    """
+    """User id when authenticated, client address otherwise."""
     user_id = getattr(request.state, "user_id", None)
     if user_id is not None:
         return f"user:{user_id}"
@@ -48,13 +35,10 @@ def caller_key(request: Request) -> str:
 
 limiter = Limiter(
     key_func=caller_key,
-    # Tests and local development would otherwise trip the auth ceiling on the
-    # fourth login of a run; the flag is off in every other environment.
+    # The test suite would otherwise trip the auth ceiling within seconds.
     enabled=not get_settings().disable_rate_limits,
-    # X-RateLimit-* injection requires every limited endpoint to declare a
-    # `response: Response` parameter. That is ten noisy signatures to advertise a
-    # budget nothing reads; the header that matters, Retry-After, is set on the
-    # 429 itself in rate_limit_handler below.
+    # X-RateLimit-* would need a `response: Response` param on every endpoint;
+    # Retry-After on the 429 is the header that actually matters.
     headers_enabled=False,
 )
 

@@ -1,14 +1,9 @@
 /** Data display.
  *
- *  Hand-rolled SVG rather than a charting library: there are two chart shapes in
- *  this product and both are twenty lines, where Recharts is ~90kB of bundle and
- *  a second design system to override. More importantly, the house rule —
- *  colour means judgement — has to hold inside the charts too, and every library
- *  ships a categorical palette that breaks it on the first render.
- *
- *  So: the line, the axes and the grid are achromatic. The only coloured marks
- *  are the data points themselves, because each one *is* a verdict about the
- *  candidate, coloured on the same three-step scale as every verdict elsewhere.
+ *  Hand-rolled SVG rather than a charting library: two chart shapes, twenty
+ *  lines each, and every library ships a categorical palette that breaks the
+ *  house rule. Axes and grid stay achromatic; only the data points carry
+ *  colour, because each one is a verdict.
  */
 
 import { useId, useRef, useState } from "react";
@@ -20,9 +15,8 @@ import { useCountUp, useMounted, usePrefersReducedMotion } from "../lib/motion";
 
 const PAD = { top: 14, right: 14, bottom: 26, left: 30 };
 
-/** The two thresholds where the readiness verdict changes. Drawing them turns
- *  the y-axis into a legend: the reader can see which band a point sits in
- *  without decoding the colour. */
+/** The thresholds where the verdict changes, drawn so the y-axis reads as a
+ *  legend rather than relying on colour. */
 const BANDS = [
   { at: 70, label: "Interview ready" },
   { at: 45, label: "Nearly ready" },
@@ -37,12 +31,10 @@ export interface TrendPoint {
   meta?: string;
 }
 
-/**
- * Readiness across sessions.
+/** Readiness across sessions.
  *
- * Deliberately not rendered below three points: a line through two dots asserts
- * a direction the data does not support. The caller shows figures instead.
- */
+ *  Not rendered below three points: a line through two dots asserts a direction
+ *  the data does not support. */
 export function Trend({
   points,
   height = 210,
@@ -148,7 +140,7 @@ export function Trend({
                   : `${300 + (i / Math.max(1, points.length - 1)) * 600}ms`,
               }}
             />
-            {/* A generous transparent target: 4.5px of dot is not a hit area. */}
+            {/* A real hit area; 4.5px of dot is not one. */}
             <circle
               cx={x(i)} cy={y(p.value)} r={16}
               className="chart__hit"
@@ -166,10 +158,8 @@ export function Trend({
           </g>
         ))}
 
-        {/* The axis is session order, not elapsed time: points are evenly
-            spaced whether they were a day or a month apart, so numbering them
-            states what is actually being plotted. The identity of each point
-            lives in the readout, where there is room for it. */}
+        {/* The axis is session order, not elapsed time. Identity lives in the
+            readout, where there is room for it. */}
         {points.map((_, i) => (
           <text key={`l-${i}`} x={x(i)} y={height - 8} className="chart__xlabel"
                 textAnchor="middle">
@@ -178,8 +168,7 @@ export function Trend({
         ))}
       </svg>
 
-      {/* The value readout is text, not a floating tooltip: it stays in one
-          place, works on touch, and is announced without a hover event. */}
+      {/* Text rather than a tooltip: works on touch, announced without hover. */}
       <p className="chart__readout" role="status" aria-live="polite">
         {active !== null ? (
           <>
@@ -198,8 +187,7 @@ export function Trend({
   );
 }
 
-/** A line small enough to sit inside a table row. No axes, no interaction —
- *  it carries shape only, and the figures beside it carry the values. */
+/** A line small enough for a table row: shape only, no axes or interaction. */
 export function Sparkline({ values, max = 5 }: { values: number[]; max?: number }) {
   const reduced = usePrefersReducedMotion();
   const mounted = useMounted(reduced ? 0 : 200);
@@ -223,8 +211,7 @@ export function Sparkline({ values, max = 5 }: { values: number[]; max?: number 
   );
 }
 
-/** A headline figure. `tone` is opt-in: most stats are counts, and a count is
- *  not a judgement, so it stays achromatic. */
+/** A headline figure. `tone` is opt-in: a count is not a judgement. */
 export function Stat({
   label, value, suffix, tone, note, decimals = 0,
 }: {
@@ -258,9 +245,7 @@ export function Stat({
   );
 }
 
-/** A change, carrying its direction as a glyph as well as a colour — the same
- *  reason the charts label their bands: colour alone is not a channel everyone
- *  receives. */
+/** A change, carrying direction as a glyph as well as a colour. */
 export function Delta({ value, suffix = "" }: { value: number; suffix?: string }) {
   if (value === 0) {
     return <span className="delta" data-dir="flat">No change</span>;
@@ -276,8 +261,7 @@ export function Delta({ value, suffix = "" }: { value: number; suffix?: string }
   );
 }
 
-/** The accessible fallback every chart on this page shares: the same numbers as
- *  a real table, collapsed by default so it does not compete with the graphic. */
+/** The same numbers as a table, collapsed so it does not compete with the chart. */
 export function DataTable({
   caption, columns, rows,
 }: {

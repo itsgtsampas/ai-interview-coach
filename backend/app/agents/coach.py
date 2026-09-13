@@ -41,11 +41,8 @@ def ask(message: str, *, user_id: int, session_id: int, db: Session) -> CoachRes
     prompt_tokens = completion_tokens = 0
 
     for _ in range(MAX_ITERATIONS):
-        # This loop is the only place in the application that reaches a provider
-        # without going through complete_structured, which means it is also the
-        # only place the spend ceiling would not be enforced — and it is the
-        # hungriest stage there is, making up to MAX_ITERATIONS calls per
-        # question. Checked every iteration, not just once on entry.
+        # The only provider call that bypasses complete_structured, so the
+        # ceiling is enforced here — every iteration, not just on entry.
         check_budget(db)
         step = provider.plan_step(prompt, [t.spec for t in tools.values()], history)
         prompt_tokens += step.prompt_tokens
@@ -66,11 +63,7 @@ def ask(message: str, *, user_id: int, session_id: int, db: Session) -> CoachRes
                 observation=f"No such tool: {step.tool}",
             ))
 
-    # Bill the model that actually served the loop. This previously recorded
-    # model="<provider>:agent" — which is in no pricing table — and passed the
-    # literal string "stub" to estimate_cost, so every agent call on any provider
-    # was recorded as free. Token counts were the initial prompt plus the final
-    # answer, ignoring every tool-call round trip in between.
+    # Bill the model that actually served the loop, summing every iteration.
     model = (
         f"stub:{coach_agent.VERSION}" if provider.name == "stub"
         else get_settings().openai_chat_model_large

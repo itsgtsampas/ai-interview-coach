@@ -1,12 +1,8 @@
 """The scorecard as a PDF the candidate can keep.
 
-Deliberately not a screenshot of the web page. The web page is a working
-surface; this is the artefact that leaves the application, so it is laid out for
-print: one column, a fixed measure, and the provenance footer that lets anyone
-reading it see which prompt versions produced the numbers.
-
-The design follows the same rule as the interface — colour means judgement.
-Every rule, bar and figure here is grey except the ones expressing a verdict.
+Laid out for print rather than screenshotted: one column, fixed measure, and a
+provenance footer naming the prompt versions behind the numbers. Same rule as
+the interface — colour means judgement.
 """
 
 import logging
@@ -24,9 +20,7 @@ from app.services.scorecard import get_scorecard
 logger = logging.getLogger("cvcoach.pdf")
 
 # --- the product palette, as RGB -------------------------------------------
-# Mirrors the tokens in frontend/src/styles.css. Kept in sync by hand: the two
-# renderers cannot share a stylesheet, and a scorecard whose verdict colours
-# disagree with the screen it was exported from is worse than either alone.
+# Mirrors the tokens in frontend/src/styles.css; kept in sync by hand.
 INK = (19, 26, 25)
 INK_2 = (69, 81, 79)
 INK_3 = (101, 111, 109)
@@ -269,8 +263,7 @@ def build(session: InterviewSession, db: Session) -> bytes:
             if pdf.get_y() > 245:
                 pdf.add_page()
 
-            # The chip belongs on the requirement's FIRST line, so the top of the
-            # block is captured before the text wraps rather than after.
+            # Capture the top before the text wraps: the chip sits on line one.
             top = pdf.get_y()
             pdf.set_font(pdf.sans, "B", 9.5)
             pdf.set_text_color(*INK)

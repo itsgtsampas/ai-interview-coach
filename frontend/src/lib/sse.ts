@@ -1,10 +1,8 @@
-/** A Server-Sent Events client built on fetch rather than EventSource.
+/** An SSE client built on fetch rather than EventSource.
  *
- *  EventSource is the obvious choice and the wrong one here: it can only issue
- *  GET, and it cannot set headers — so the bearer token would have to travel in
- *  the query string, which lands in server logs and browser history. Reading the
- *  stream off a normal fetch keeps the Authorization header and lets these be
- *  POSTs, at the cost of parsing the (very small) wire format ourselves.
+ *  EventSource can only issue GET and cannot set headers, which would put the
+ *  bearer token in the query string — and so into logs and history. The cost is
+ *  parsing the wire format here.
  */
 
 import { ApiError, token } from "../api/client";
@@ -23,10 +21,7 @@ interface Frame {
   data: unknown;
 }
 
-/** Split a decoded buffer into complete frames, returning the unconsumed tail.
- *
- *  A chunk boundary can fall anywhere, including mid-frame, so anything after
- *  the last blank line is carried forward rather than parsed. */
+/** Split a buffer into complete frames, returning the unconsumed tail. */
 function drain(buffer: string): { frames: Frame[]; rest: string } {
   const frames: Frame[] = [];
   const parts = buffer.split("\n\n");
@@ -44,20 +39,16 @@ function drain(buffer: string): { frames: Frame[]; rest: string } {
     try {
       frames.push({ event, data: JSON.parse(data.join("\n")) });
     } catch {
-      // A frame we cannot parse is a bug on the server, not something to show
-      // the user mid-stream; the stream continues and `done` still decides.
+      // Skip an unparseable frame; `done` still decides the outcome.
     }
   }
   return { frames, rest };
 }
 
-/**
- * POST to an SSE endpoint and dispatch its events.
+/** POST to an SSE endpoint and dispatch its events.
  *
- * Resolves with the `done` payload. Rejects if the request fails, if the server
- * sends an `error` event, or if the stream ends without a `done` — a stream that
- * stops early is a failure even though its status line said 200.
- */
+ *  Resolves with the `done` payload. A stream that ends without one is a
+ *  failure, whatever its status line said. */
 export async function streamRequest<T>(
   path: string,
   body: unknown,
@@ -75,8 +66,7 @@ export async function streamRequest<T>(
     signal,
   });
 
-  // Failures before the stream opens are ordinary HTTP, so they keep the
-  // ordinary error shape and the ordinary handling.
+  // Failures before the stream opens are ordinary HTTP.
   if (!response.ok || !response.body) {
     const payload = await response.json().catch(() => ({}));
     if (response.status === 401) token.clear();
@@ -114,8 +104,7 @@ export async function streamRequest<T>(
           handlers.onDone?.(result);
         } else if (frame.event === "error") {
           const e = frame.data as { error: string; message: string; details?: object };
-          // Recorded rather than thrown: the stream is still open, and cancelling
-          // the reader from inside the loop races with the last read.
+          // Recorded, not thrown: cancelling mid-loop races with the last read.
           failure = new ApiError(200, e.error, e.message, e.details ?? {});
         }
       }

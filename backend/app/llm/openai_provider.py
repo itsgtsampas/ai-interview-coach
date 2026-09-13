@@ -32,12 +32,10 @@ class OpenAIProvider:
 
     @staticmethod
     def _describe(response: httpx.Response) -> str:
-        """The API's own explanation, not just its status code.
+        """The API's own error message, not just the status code.
 
-        raise_for_status() discards the body, which is where OpenAI puts the
-        only useful part: a 429 is "slow down" *or* "you have no credits", and
-        those need completely different responses from the reader. Reporting
-        just the status turned a one-line fix into a guessing game.
+        A 429 means "slow down" or "no credits remaining" — the status alone
+        cannot tell them apart.
         """
         try:
             err = response.json().get("error", {}) or {}
@@ -77,17 +75,9 @@ class OpenAIProvider:
                 {"role": "system", "content": prompt.system},
                 {"role": "user", "content": prompt.user},
             ],
-            # json_object, not json_schema. Structured Outputs rejects most of
-            # what Pydantic generates from our contracts - maxItems, minLength,
-            # minimum, default, and objects without additionalProperties:false -
-            # so passing model_json_schema() here 400s on the first request.
-            #
-            # This mode guarantees syntactically valid JSON and nothing more,
-            # which is exactly the split the design already assumes: the shape is
-            # described in the prompt's FORMAT block, and llm/structured.py
-            # validates it against the Pydantic model with one repair retry.
-            # That second line of defence exists precisely so the provider does
-            # not have to be trusted with the schema.
+            # json_object, not json_schema: Structured Outputs rejects most of
+            # what Pydantic emits here (maxItems, minLength, default). The shape
+            # is in the prompt's FORMAT block and structured.py validates it.
             "response_format": {"type": "json_object"},
         })
         usage = data.get("usage", {})
@@ -105,13 +95,11 @@ class OpenAIProvider:
         model: str,
         temperature: float,
     ) -> Iterator[str]:
-        """Real token streaming, passed straight through to the caller.
+        """Stream tokens straight through to the caller.
 
-        OpenAI speaks SSE on the wire too, so this parses one SSE stream and
-        re-frames it as ours. `[DONE]` is the sentinel that ends it; a line that
-        is not valid JSON after the `data: ` prefix is skipped rather than
-        failing the response, because a half-written frame at a chunk boundary
-        is normal.
+        OpenAI speaks SSE too, so this re-frames one stream as ours. A frame
+        that will not parse is skipped: a partial frame at a chunk boundary is
+        normal, and `[DONE]` ends the stream.
         """
         body = {
             "model": model,

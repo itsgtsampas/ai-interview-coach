@@ -35,12 +35,7 @@ def spent_usd(db: Session) -> float:
 
 
 def check_budget(db: Session) -> None:
-    """Refuse before the call, not after.
-
-    Checked here because this module is the only thing that reaches a provider,
-    so there is exactly one place money can leave — and one place to stop it.
-    The stub is free, so its calls never consult this.
-    """
+    """Refuse before the call. This module is the only route to a provider."""
     settings = get_settings()
     if settings.llm_provider == "stub" or settings.max_spend_usd <= 0:
         return
@@ -152,14 +147,9 @@ def complete_stream(
 ) -> Iterator[str]:
     """Streaming counterpart of `complete_structured`.
 
-    Same contract as the rest of this module: the provider is reached through
-    here and nowhere else, and a telemetry row is written whatever happens. The
-    difference is that the text is handed back in pieces as it is produced, and
-    the caller is expected to be inside a `StreamingResponse`.
-
-    Not cached. A cached stream would replay instantly, which is indistinguishable
-    from the non-streaming path and would make the cost of this stage invisible
-    in the telemetry — the two reasons to look at it at all.
+    Same contract — provider reached only through here, telemetry written either
+    way — but the text arrives in pieces. Not cached: a cached stream replays
+    instantly and hides the stage's real cost.
     """
     check_budget(db)
     provider = get_llm_provider()
@@ -179,11 +169,8 @@ def complete_stream(
         elapsed = (time.perf_counter() - started) * 1000
         completion_tokens = estimate_tokens(text)
         prompt_tokens = estimate_tokens(prompt.system + prompt.user)
-        # Attribute the call to whoever actually served it. complete_structured
-        # learns this from the response; a stream has no response object, so
-        # without this the free stub was recorded as gpt-4o and priced at gpt-4o
-        # rates — a telemetry row that was simply untrue, and phantom spend
-        # counting against a real budget ceiling.
+        # A stream has no response object to read the model from, so attribute
+        # it here or the double gets billed at the real provider's rates.
         served_by = f"stub:{prompt.stage}" if provider.name == "stub" else model
         db.add(LLMCall(
             session_id=session_id,

@@ -1,16 +1,10 @@
 """Cross-session progress.
 
-Every other stage looks at one application. This looks at all of them, which is
-the only place two things become visible:
+Aggregates every application at once, which is the only place a *recurring* gap
+is visible: missing one posting's requirement is a mismatch, missing the same
+one in four is worth learning.
 
-* whether practice is actually moving the readiness score, or just producing it
-  repeatedly;
-* which requirement keeps costing the candidate offers. A gap that is missing in
-  one posting is a mismatch; the same gap missing in four is the thing to go and
-  learn, and no single session can tell you that.
-
-Everything here is aggregation over stored rows. No model is called, so the page
-is free to load and its numbers trace back to the sessions that produced them.
+Pure aggregation over stored rows — no model is called.
 """
 
 from collections import defaultdict
@@ -38,16 +32,10 @@ MIN_POINTS_FOR_TREND = 3
 def _gap_key(requirement: str) -> str:
     """Group the same gap across postings that phrase it differently.
 
-    "Experience with Kubernetes in production" and "Kubernetes (must have)"
-    should count as one recurring gap. Salient terms — the capitalised,
-    non-stopword vocabulary — are what survives both phrasings, and the FIRST
-    one is the key: postings append qualifiers in no consistent order, so
-    "Terraform" and "Terraform or similar IaC" only share their head.
-
-    This over-merges rather than under-merges — "AWS Lambda" and "AWS S3" both
-    key on "aws". For a list whose purpose is "go and learn this", grouping a
-    family of related gaps under one heading is the useful error; splitting one
-    recurring gap into three singletons that never reach the threshold is not.
+    Keys on the first salient term, since postings append qualifiers in no
+    consistent order. Over-merges rather than under-merges: "AWS Lambda" and
+    "AWS S3" both key on "aws", which is the better error for a list whose
+    purpose is "go and learn this".
     """
     terms = salient_terms(requirement)
     if not terms:

@@ -1,9 +1,8 @@
 """Stage 7: a cover letter built only from requirements the CV evidenced.
 
-The grounding is structural rather than instructional. Unevidenced requirements
-are passed to the prompt in a separate list precisely so they can be named as
-forbidden, and the strong ones arrive with the sentence that earned them — so
-the letter is a rearrangement of things already proven, not a new set of claims.
+Grounding is structural, not instructional: unevidenced requirements go to the
+prompt in a separate list so they can be named as forbidden, and evidenced ones
+arrive with the sentence that earned them.
 """
 
 import json
@@ -30,13 +29,7 @@ _ACHIEVEMENT = re.compile(r"^[A-Z][a-z]+(?:ed|t|lt|ught|ade)\b")
 
 
 def company_from(title: str, role: str) -> str:
-    """The employer's name out of a session title.
-
-    Sessions are named by the user, and the convention the interface suggests is
-    "Company - Role" ("Ardent Systems - Senior Python"). Handing the whole title
-    to the letter produced "the Senior Python Engineer role at Ardent Systems -
-    Senior Python". Splitting on the dash recovers the half that is a company.
-    """
+    """The employer's name from a session title shaped "Company - Role"."""
     head = re.split(r"\s+[-\u2013\u2014]\s+", title.strip(), maxsplit=1)[0].strip()
     if not head:
         return title.strip()
@@ -48,12 +41,9 @@ def company_from(title: str, role: str) -> str:
 
 
 def _restates_the_role(requirement: str, role: str) -> bool:
-    """Is this "requirement" just the job title again?
+    """Whether this "requirement" is just the job title restated.
 
-    Extractors sometimes lift the posting's own headline out as a requirement.
-    Left in, the letter says "...the Senior Python Engineer role. The
-    requirement I match most directly is Senior Python Engineer." Filtering it
-    out of the material is better than teaching every renderer to skip it.
+    Extractors sometimes lift the posting's headline out as a requirement.
     """
     if not role:
         return False
@@ -93,11 +83,8 @@ def _material(session: InterviewSession, db: Session) -> tuple[list[dict], list[
         and i.evidence_quote
         and not _restates_the_role(i.requirement, session.target_role)
     ]
-    # Achievements first, then confidence. A high-confidence match whose quote is
-    # a CV heading ("Senior Backend Engineer, Nexora Commerce (2021-2024)") makes
-    # a worse paragraph than a slightly weaker one quoting something the
-    # candidate actually did, because only the second can be rewritten into a
-    # first-person claim.
+    # Achievements before confidence: only a quote describing work can be
+    # rewritten into a first-person claim. A job heading cannot.
     evidenced.sort(key=lambda e: (_is_achievement(e["quote"]), e["confidence"]), reverse=True)
 
     # Only must-haves are worth acknowledging. Listing every nice-to-have the CV
@@ -136,11 +123,10 @@ def generate(session: InterviewSession, db: Session, tone: str = "plain") -> Cov
 
 
 def stream(session: InterviewSession, db: Session, tone: str = "plain") -> Iterator[str]:
-    """Streaming path: yields the body in pieces, then persists the whole thing.
+    """Yield the body in pieces, then persist it.
 
-    The caller frames these as SSE `token` events. Persistence happens after the
-    last piece, so a reader who disconnects halfway leaves no half-written letter
-    in the database.
+    Persistence happens after the last piece, so a disconnect leaves no
+    half-written letter behind.
     """
     settings = get_settings()
     tone = tone if tone in TONES else "plain"

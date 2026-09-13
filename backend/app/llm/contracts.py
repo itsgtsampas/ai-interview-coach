@@ -40,10 +40,8 @@ class MatchItemOut(BaseModel):
 class MatchReportOut(BaseModel):
     overall_score: int = Field(ge=0, le=100)
 
-    # These scores are weighted averages, so a model returns 67.6 as often as 68.
-    # Rejecting that spent a whole repair round trip to be told the same number
-    # without its decimal. Rounding here keeps the stored contract an integer
-    # while accepting the shape the arithmetic actually produces.
+    # Weighted averages come back fractional as often as not; rounding here
+    # saves a repair round trip and keeps the stored contract an integer.
     @field_validator("overall_score", mode="before")
     @classmethod
     def _round_score(cls, v):
