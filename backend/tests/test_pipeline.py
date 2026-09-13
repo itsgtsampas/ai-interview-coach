@@ -503,3 +503,22 @@ def test_demographics_never_reach_a_prompt(auth_client):
     assert "Software Engineer" in context
     for leaked in ("1990", "female", "Greek", "690"):
         assert leaked not in context, f"{leaked!r} reached the model context"
+
+
+def test_a_claim_never_survives_its_citation(auth_client, ready_session):
+    """An unverifiable quote must take its verdict down with it.
+
+    The service previously dropped the quote and downgraded the status to
+    "partial", leaving a claim with nothing behind it — the single thing the
+    product promises never to do. Greek documents made it common, because
+    retrieval could not see the language and citations stopped verifying.
+    """
+    sid = ready_session
+    report = auth_client.post(f"/api/v1/sessions/{sid}/analysis").json()
+    for item in report["items"]:
+        if item["status"] != "missing":
+            assert item["evidence_quote"], (
+                f"{item['requirement']!r} is {item['status']} with no citation"
+            )
+        else:
+            assert item["evidence_quote"] is None

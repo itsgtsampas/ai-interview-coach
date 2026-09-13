@@ -101,12 +101,17 @@ def run_analysis(
     # Second line of grounding defence: strip any citation the context does not contain.
     for idx, item in enumerate(report_out.items):
         if not verify_citation(item.evidence_quote, evidence.get(str(idx), [])):
+            # A verdict whose citation cannot be verified becomes "missing", not
+            # "partial". Keeping a claim after discarding the sentence behind it
+            # is the one thing this product promises never to do, and it is what
+            # the prompt itself instructs: if there is no such sentence, the
+            # status is missing.
             logger.warning("Dropped an unverifiable citation on item %s", idx)
             item.evidence_quote = None
             item.evidence_page = None
             item.evidence_chunk_id = None
-            if item.status != "missing":
-                item.status = "partial"
+            item.evidence_section = None
+            item.status = "missing"
 
     existing = db.exec(
         select(MatchReport).where(MatchReport.session_id == session.id)
