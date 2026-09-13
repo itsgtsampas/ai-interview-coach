@@ -22,8 +22,11 @@ class Settings(BaseSettings):
     storage_dir: Path = Path("./data/storage")
     chroma_dir: Path = Path("./data/chroma")
 
-    # LLM / embeddings.  "stub" needs no API key and no network.
-    llm_provider: str = "stub"
+    # The application talks to the OpenAI API. "stub" selects the deterministic
+    # test double in app/llm/stub.py — it exists so the test suite and the eval
+    # harness can run free and reproducibly, and it is not a supported way to
+    # run the product.
+    llm_provider: str = "openai"
     embedding_provider: str = "stub"
     openai_api_key: str | None = None
     # Both tiers default to the cheap model. The two-tier split is real — see

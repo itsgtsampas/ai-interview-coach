@@ -125,9 +125,9 @@ Legend: **✅ built and exercised** · **🟡 partial** · **⬜ not started**
   Άσκηση 5 rubric. Now covers **eight** stages: the original five plus `coach_agent`,
   `rewrite_bullet` and `cover_letter`.
 - Screenshots and demo video
-- Switching `LLM_PROVIDER=openai` to run the three measurements the harness implements
-  but cannot exercise offline: the few-shot/zero-shot prompt ablation, self-consistency,
-  and LLM-as-judge agreement.
+- Running the three measurements the harness implements but could not exercise offline:
+  the few-shot/zero-shot prompt ablation, self-consistency, and LLM-as-judge agreement.
+  The provider is now live, so these are unblocked.
 
 ---
 

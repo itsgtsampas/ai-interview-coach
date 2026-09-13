@@ -9,21 +9,33 @@ Final project for **AI for Developers**, AUEB Centre for Training and Lifelong L
 
 ---
 
-## Runs with no API key
+## Runs on the OpenAI API
 
-The application ships with a **deterministic local provider** (`LLM_PROVIDER=stub`) that
-needs no OpenAI key, no network and no model download. It is not a mock returning canned
-text: every stage derives its output from the actual CV and job description you upload,
-using rule-based IDF-weighted analysis, and every citation is a real verbatim slice of a
-retrieved chunk.
+Every reasoning stage — requirement extraction, the gap analysis, question generation,
+answer scoring, the scorecard, the coach agent, bullet rewrites and the cover letter —
+is a real call to `gpt-4o-mini` through `https://api.openai.com/v1/chat/completions`.
+See [Switching on a real model](#switching-on-a-real-model) for setup, and
+[`docs/prompts.md`](docs/prompts.md) for the prompt behind each stage.
 
-Switching to a real model is a two-line configuration change — no calling code moves:
+Nothing in the application is hardwired to OpenAI. Providers implement a single
+`LLMProvider` protocol and are selected by one setting, so swapping models — or vendors —
+moves no calling code. `app/llm/structured.py` is the only thing that reaches a provider
+at all: it validates every response against a Pydantic contract, retries once on a schema
+failure, enforces the spend ceiling, and writes a telemetry row either way.
 
-```bash
-LLM_PROVIDER=openai
-EMBEDDING_PROVIDER=openai
-OPENAI_API_KEY=sk-...
-```
+### The test double
+
+`app/llm/stub.py` implements the same protocol without a network call, and exists for two
+jobs: it keeps the **89-test suite** free, instant and deterministic, and it lets the
+**eval harness** measure retrieval and chunking changes with the model held still.
+
+It is a test double, not a way to run the product — selecting it logs a warning, and the
+application defaults to `openai`. It is worth knowing that it is not a mock returning
+canned text: it derives each stage from the actual documents using rule-based IDF-weighted
+analysis, which is what makes the retrieval ablations meaningful.
+
+One test run makes **86 model calls**. Against the API that is ~$0.05 and several minutes
+of non-deterministic network; against the double it is free and takes 30 seconds.
 
 ---
 
@@ -86,13 +98,15 @@ Alongside the stage sequence:
 
 ## Switching on a real model
 
-The application ships on a deterministic offline provider and needs no key. To
-run it against `gpt-4o-mini` instead:
+The application calls the OpenAI API, so it needs a key before it will start
+doing useful work:
 
 1. Get a key at `platform.openai.com` and put it in `backend/.env` (copy
    `.env.example` first). `.env` is gitignored — never commit it, and never
    paste a key into a chat or an issue.
-2. Set `LLM_PROVIDER=openai`.
+2. Add credit to the account. The API is **prepaid** and separate from any
+   ChatGPT subscription; a key with no credit authenticates and then refuses
+   every call with `insufficient_quota`.
 3. Verify it before running anything else:
 
 ```bash
@@ -109,9 +123,14 @@ reaching a provider, so a retry loop or a runaway eval sweep cannot exceed it.
 Both model tiers default to `gpt-4o-mini`; `gpt-4o` is about 17x the price and
 has to be opted into explicitly.
 
-`EMBEDDING_PROVIDER` is separate and stays `stub` unless you change it. Switching
-it too would alter retrieval *and* require re-indexing every document, so it is
-worth doing as its own measured step rather than at the same time.
+`EMBEDDING_PROVIDER` is separate and stays `stub` unless you change it: retrieval
+currently uses a hashing vectoriser, not semantic embeddings. Switching it alters
+retrieval *and* requires re-indexing every document, so it is worth doing as its
+own measured step rather than confounding two variables at once.
+
+**No key?** The app will not run without one. The test suite and eval harness
+still will — both pin the test double explicitly — so `pytest` and
+`python -m evals.run` work on a fresh clone with no account at all.
 
 ---
 
@@ -170,9 +189,10 @@ docs/
 
 - Scanned/image PDFs are rejected with a clear message rather than silently misread. OCR
   is out of scope.
-- The stub provider is lexical, not semantic: it matches vocabulary and known synonyms,
-  so it will miss a paraphrase that shares no words. Switching to a real model and real
-  embeddings removes this.
+- Retrieval is still lexical, not semantic: `EMBEDDING_PROVIDER` defaults to a hashing
+  vectoriser, so a paraphrase sharing no vocabulary with the requirement can be missed.
+  The reasoning stages are unaffected — those are real model calls. Setting
+  `EMBEDDING_PROVIDER=openai` and re-indexing fixes it.
 - `create_all` builds the schema, with a helper that adds missing nullable columns on
   startup; a production deployment would use Alembic migrations.
 - The scorecard PDF renders with fpdf2's built-in Helvetica, which is Latin-1. Greek and

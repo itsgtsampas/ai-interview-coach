@@ -1063,3 +1063,71 @@ reads the same. `--strong` (5.60:1) and `--missing` (6.20:1) already passed.
 Every text node on all seven pages now clears AA at its rendered size. The PDF carries a
 second copy of these values — the two renderers cannot share a stylesheet — and was updated
 with them.
+
+---
+
+## 17. Going live on the API
+
+`LLM_PROVIDER` defaults to `openai` and every reasoning stage is a real
+`gpt-4o-mini` call. The deterministic provider in `app/llm/stub.py` is now
+documented as what it always was — a **test double**. It keeps the 89-test suite
+free and deterministic (one run makes 86 model calls, ~$0.05 and several minutes
+of non-deterministic network against the real API) and it lets the eval harness
+measure retrieval and chunking changes with the model held still. Selecting it
+logs a warning, because a deployment quietly answering from rules instead of a
+model looks like it is working right up until someone checks a citation.
+
+Three defects had to be fixed before a key could go behind these calls, and all
+three were found by reading the code rather than by running it:
+
+**The first request would have failed.** `complete_json` asked for
+`response_format: json_schema` and passed `schema.model_json_schema()` straight
+through. Structured Outputs rejects most of what Pydantic emits from these
+contracts — `maxItems`, `minItems`, `minLength`, `maxLength`, `minimum`,
+`maximum`, `default`, and objects without `additionalProperties: false` — every
+one of which appears in `RequirementsOut`, `EvaluationOut` or `MatchReportOut`.
+Now `json_object`, which guarantees valid JSON and nothing more. That is the
+split the design already assumed: the shape is described in each prompt's FORMAT
+block, and `structured.py` validates against the Pydantic model with one repair
+retry. The second line of defence exists precisely so the provider need not be
+trusted with the schema.
+
+**The free provider was being billed.** `complete_stream` has no response object
+to learn the serving model from, so it recorded whatever model it was asked for:
+three cover-letter streams sat in telemetry as `gpt-4o`, at `gpt-4o` rates, for
+calls the double served. A false row, and phantom spend that would have counted
+against a real ceiling.
+
+**Nothing capped money.** The rate limiter caps requests per caller.
+`MAX_SPEND_USD` is checked against summed telemetry before every call, inside
+`structured.py` — the one place anything reaches a provider, so the one place
+money can leave. It returns 402, not 429: this is not "slow down", it is "the
+limit you set has been reached".
+
+A fourth was found by the first live call. A 429 came back reported as
+"429 Too Many Requests", which is the one reading of that status that is wrong
+here — `raise_for_status()` discards the body, and the body said
+`insufficient_quota` / `credit_balance_exhausted`. A 429 means "slow down" *or*
+"your account has no money on it", and those need completely different responses.
+The provider now reports the API's own `code` and `message`, on both paths, and
+keeps transport failures separate.
+
+### What changed when the model became real
+
+Measured on one live posting (`Wallbid`, a Java backend role, against a Java CV):
+
+| | Test double | `gpt-4o-mini` |
+|---|---|---|
+| Overall match | 55/100 | **80/100** |
+| "Solid knowledge of Java (17+), the JVM ecosystem…" | partial | **strong** |
+| "Minimum 2 years… in Java" cited | a skills-list fragment | *"Software Engineer with 3+ years of experience"* |
+| Couchbase / JUnit / Docker / Kafka | missing | missing (unchanged — correctly) |
+| Citations verbatim in the CV | 8/8 | **8/8** |
+| Unsupported claims | 0 | **0** |
+| Cost / latency | free, instant | $0.0017, 10.8s |
+
+The model is better at exactly what the rule-based double was weakest at —
+recognising that migrating Java 8 to 21 evidences "solid knowledge of Java" —
+while every genuinely absent skill stayed absent. The grounding contract holds:
+every quote it produced appears verbatim in the CV, and it made no claim without
+one.
