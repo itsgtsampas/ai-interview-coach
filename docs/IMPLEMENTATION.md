@@ -125,9 +125,9 @@ Legend: **✅ built and exercised** · **🟡 partial** · **⬜ not started**
   `backend/.venv/bin/python docs/build/render_documentation.py`.
 - ~~Screenshots~~ — **done**: 10 unretouched captures in `docs/screenshots/`,
   seven of them used in the documentation.
-- `docs/prompts.md` — every prompt in PCTF form with version history, scored on the
-  Άσκηση 5 rubric. Now covers **eight** stages: the original five plus `coach_agent`,
-  `rewrite_bullet` and `cover_letter`.
+- ~~`docs/prompts.md`~~ — **done**: all eight prompts with their PCTF blocks,
+  the technique behind each, and a 1-5 assessment on the Άσκηση 5 rubric
+  (clarity, context, persona, output quality, format) with justifications.
 - Optional demo video
 - Running the three measurements the harness implements but could not exercise offline:
   the few-shot/zero-shot prompt ablation, self-consistency, and LLM-as-judge agreement.

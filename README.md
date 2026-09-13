@@ -18,9 +18,10 @@ example, limitations and future extensions. Screenshots are in
 [docs/screenshots/](docs/screenshots/).
 
 Supporting detail lives alongside it: [DESIGN.md](docs/DESIGN.md) for the design
-rationale and the decisions taken along the way, [evaluation.md](docs/evaluation.md)
-for the harness and what it found, [IMPLEMENTATION.md](docs/IMPLEMENTATION.md) for
-seminar-technique coverage.
+rationale and the decisions taken along the way, [prompts.md](docs/prompts.md) for
+all eight prompts with their PCTF blocks and a 1-5 rubric assessment of each,
+[evaluation.md](docs/evaluation.md) for the harness and what it found, and
+[IMPLEMENTATION.md](docs/IMPLEMENTATION.md) for seminar-technique coverage.
 
 ---
 
