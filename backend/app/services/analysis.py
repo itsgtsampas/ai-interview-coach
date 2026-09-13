@@ -35,16 +35,40 @@ def _jd_text(session_id: int, db: Session) -> str:
     return load_document(doc).full_text
 
 
-def verify_citation(quote: str | None, passages: list[dict]) -> bool:
-    """A citation must appear verbatim in the retrieved context.
+# A model quoting a clause tends to close it with a full stop where the source
+# has a comma. That is not a fabrication, so trailing punctuation is not part of
+# the comparison - but every other character still has to match, in order.
+_QUOTE_EDGE = " .,;:\u00b7\u2014\u2013-\"'\u201c\u201d"
 
-    Cheap, mechanical, and it catches the worst failure mode in the system: a
-    confident verdict attached to a quote the CV never contained.
+
+def locate_citation(quote: str | None, passages: list[dict]) -> str | None:
+    """Find the quote in the retrieved context and return the SOURCE's own text.
+
+    Returning the source span rather than the model's rendering closes a small
+    gap in the grounding promise: what the interface displays is then literally
+    the characters in the document, not a retyping of them that might differ in
+    punctuation or accent.
+
+    None means the quote is not in the retrieved context - the failure mode this
+    check exists for, a confident verdict attached to a sentence the CV never
+    contained.
     """
     if not quote:
-        return True
-    needle = " ".join(quote.split()).lower()
-    return any(needle in " ".join(p["text"].split()).lower() for p in passages)
+        return None
+    needle = " ".join(quote.split()).strip(_QUOTE_EDGE)
+    if not needle:
+        return None
+    for passage in passages:
+        haystack = " ".join(passage["text"].split())
+        at = haystack.lower().find(needle.lower())
+        if at >= 0:
+            return haystack[at : at + len(needle)]
+    return None
+
+
+def verify_citation(quote: str | None, passages: list[dict]) -> bool:
+    """Whether a citation appears in the retrieved context at all."""
+    return quote is None or locate_citation(quote, passages) is not None
 
 
 def run_analysis(
@@ -100,7 +124,11 @@ def run_analysis(
 
     # Second line of grounding defence: strip any citation the context does not contain.
     for idx, item in enumerate(report_out.items):
-        if not verify_citation(item.evidence_quote, evidence.get(str(idx), [])):
+        found = locate_citation(item.evidence_quote, evidence.get(str(idx), []))
+        if item.evidence_quote and found:
+            # Show the document's characters, not the model's retyping of them.
+            item.evidence_quote = found
+        elif item.evidence_quote:
             # A verdict whose citation cannot be verified becomes "missing", not
             # "partial". Keeping a claim after discarding the sentence behind it
             # is the one thing this product promises never to do, and it is what

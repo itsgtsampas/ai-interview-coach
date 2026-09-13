@@ -1,9 +1,21 @@
-"""Small, dependency-free text helpers shared by the RAG and stub-LLM layers."""
+"""Small, dependency-free text helpers shared by the RAG and stub-LLM layers.
+
+Handles Greek as well as Latin script. Greek needs three things Latin does not:
+accents folded away (Άριστη / αριστη), final sigma normalised, and a light
+suffix stripper, because the language inflects far more than English and a
+requirement saying "γνώση" must match a CV saying "γνώσεις".
+"""
 
 import math
 import re
+import unicodedata
 
-_WORD = re.compile(r"[A-Za-z][A-Za-z0-9+#.\-]*(?:/[A-Za-z0-9+#.\-]+)+|[A-Za-z][A-Za-z0-9+#.\-]{1,}")
+# Greek (0370-03FF) and Greek Extended (1F00-1FFF) alongside Latin, so a Greek
+# CV is not invisible to every lexical stage in the pipeline.
+_L = r"A-Za-z\u0370-\u03FF\u1F00-\u1FFF"
+_WORD = re.compile(
+    rf"[{_L}][{_L}0-9+#.\-]*(?:/[{_L}0-9+#.\-]+)+|[{_L}][{_L}0-9+#.\-]{{1,}}"
+)
 _SENT_SPLIT = re.compile(r"(?<=[.!?;])\s+")
 _ENDS_SENTENCE = re.compile(r"[.!?:;]$")
 # A line ending on any of these continues onto the next, even if that line
@@ -33,6 +45,28 @@ STOPWORDS = {
     "on", "off", "up", "side",
 }
 
+
+# Greek, folded to match `tokens()` output. Two groups, mirroring the English
+# list above: grammar (articles, prepositions, conjunctions, auxiliaries), and
+# job-description boilerplate - words that phrase a requirement but never
+# evidence one, so they must not become the term a verdict hinges on.
+STOPWORDS |= {
+    # grammar
+    "ο", "η", "το", "οι", "τα", "του", "τησ", "των", "τον", "την", "στο", "στη",
+    "στην", "στον", "στα", "στουσ", "στισ", "σε", "με", "και", "ή", "για", "απο",
+    "που", "ενα", "ενασ", "μια", "μιασ", "ειναι", "εχει", "εχουν", "θα", "να",
+    "ωσ", "κατα", "προσ", "ανα", "επι", "υπο", "δια", "μετα", "χωρισ", "αλλα",
+    "οπωσ", "οταν", "οπου", "καθε", "ολα", "ολων", "αυτο", "αυτη", "αυτων",
+    "τουλαχιστον", "περιπου", "επισησ", "ετων", "ετη", "χρονια", "χρονων",
+    # job-description boilerplate
+    "εμπειρια", "εμπειριασ", "εμπειριεσ", "γνωση", "γνωσησ", "γνωσεισ",
+    "ικανοτητα", "ικανοτητεσ", "δεξιοτητεσ", "προσοντα", "απαραιτητα",
+    "επιθυμητα", "απαιτησεισ", "αρμοδιοτητεσ", "καθηκοντα", "προυποθεσεισ",
+    "αριστη", "πολυ", "καλη", "καλησ", "ισχυρη", "βαθια", "αποδεδειγμενη",
+    "εξοικειωση", "κατανοηση", "συναφουσ", "αντικειμενου", "τομεα", "θεση",
+    "ρολο", "ομαδα", "ομαδασ", "εταιρεια", "υποψηφιοσ", "υποψηφιου",
+    "κατοχη", "επαγγελματικησ", "επαγγελματικη", "σχετικη", "σχετικησ",
+}
 
 SYNONYMS: dict[str, set[str]] = {
     "kubernetes": {"k8s", "eks", "gke", "openshift"},
@@ -66,8 +100,20 @@ SYNONYMS: dict[str, set[str]] = {
 }
 
 
+def fold(text: str) -> str:
+    """Lowercase, strip diacritics, and normalise final sigma.
+
+    Greek marks stress on almost every word and moves it under inflection, so
+    "Άριστη" and "άριστης" share no exact prefix until the accents are gone.
+    Folding Latin too is harmless and quietly fixes "Café" / "cafe".
+    """
+    lowered = unicodedata.normalize("NFD", text.lower())
+    stripped = "".join(c for c in lowered if not unicodedata.combining(c))
+    return unicodedata.normalize("NFC", stripped).replace("\u03c2", "\u03c3")
+
+
 def tokens(text: str) -> list[str]:
-    return [m.group(0).lower() for m in _WORD.finditer(text)]
+    return [fold(m.group(0)) for m in _WORD.finditer(text)]
 
 
 def keywords(text: str, *, limit: int = 24) -> list[str]:
@@ -164,6 +210,35 @@ def sentences(text: str) -> list[str]:
     return out
 
 
+_GREEK = re.compile(r"[\u0370-\u03FF\u1F00-\u1FFF]")
+
+# Longest first, so "-ματων" is tried before "-ων". Deliberately short: an
+# aggressive stemmer conflates unrelated words, and a false match here becomes a
+# false citation, which is the expensive error.
+_GR_SUFFIXES = (
+    "ματων", "ματα", "οντασ", "ωντασ", "μενοσ", "μενη", "μενο",
+    "ιδεσ", "εωσ", "εων", "ουσ", "εισ", "ησ", "οσ", "ασ", "εσ", "οι",
+    "ων", "ου", "α", "ε", "η", "ι", "ο", "υ",
+)
+_MIN_GREEK_STEM = 4
+
+
+def greek_stem(token: str) -> str:
+    """Strip one inflectional ending, when what remains is still a real stem.
+
+    Greek inflects heavily: a posting asking for "σχεδιασμό" against a CV saying
+    "σχεδίασα" shares no useful prefix. This is not a full stemmer and is not
+    meant to be - it removes the endings that separate the same word from
+    itself, and leaves everything else alone.
+    """
+    if not _GREEK.search(token):
+        return token
+    for suffix in _GR_SUFFIXES:
+        if token.endswith(suffix) and len(token) - len(suffix) >= _MIN_GREEK_STEM:
+            return token[: -len(suffix)]
+    return token
+
+
 def _matches(keyword: str, haystack_tokens: set[str]) -> bool:
     if keyword in haystack_tokens:
         return True
@@ -174,7 +249,11 @@ def _matches(keyword: str, haystack_tokens: set[str]) -> bool:
     if any("/" in h and keyword in h.split("/") for h in haystack_tokens):
         return True
     # Partial credit for morphological variants: containerise / containerisation.
-    return len(keyword) >= 5 and any(h.startswith(keyword[:5]) for h in haystack_tokens)
+    if len(keyword) >= 5 and any(h.startswith(keyword[:5]) for h in haystack_tokens):
+        return True
+    # Greek inflection, which the prefix rule above misses more often than not.
+    stem = greek_stem(keyword)
+    return stem != keyword and any(greek_stem(h) == stem for h in haystack_tokens)
 
 
 def salient_terms(text: str) -> list[str]:
