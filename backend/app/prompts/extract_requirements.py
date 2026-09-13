@@ -1,5 +1,16 @@
 """Stage 1a — pull discrete requirements out of a job description.
 
+Version history
+---------------
+v4  The `kind` field was in the contract and in the model layer from the start,
+    but this prompt never asked for it: neither the task nor the format block
+    mentioned it, so the model never emitted one and the contract default made
+    every requirement "evidenceable". The distinction worked only under the
+    deterministic provider, which classifies by rule, and stopped silently when
+    a real model took over. A real posting was scored 55/100 with "keen to
+    constantly learn and improve your own skills" counted as a missing
+    requirement — exactly the penalty this field exists to prevent.
+
 Technique: ZERO-SHOT. Extraction against a fixed schema is well specified in
 words; exemplars would add tokens without adding accuracy. This is also the
 baseline the eval harness compares few-shot variants against.
@@ -11,7 +22,7 @@ from app.llm.base import RenderedPrompt
 from app.prompts.blocks import fence, json_only, pctf
 from app.textutil import detect_language
 
-VERSION = "extract_requirements.v3"
+VERSION = "extract_requirements.v4"
 
 PERSONA = (
     "You are a technical recruiter who has screened several thousand engineering "
@@ -33,12 +44,26 @@ Work through these steps:
 5. Label each as must_have or nice_to_have. Wording such as "required",
    "strong", "proven", "must" indicates must_have; "nice to have", "bonus",
    "a plus", "preferred" indicates nice_to_have.
+6. Label each as evidenceable or behavioural, by asking one question: COULD A CV
+   SHOW THIS AT ALL?
+   - evidenceable: a CV can demonstrate it. Technologies, years of experience,
+     degrees, named systems, measurable outcomes, ways of working a CV can state
+     ("worked in a Scrum team", "mentored juniors").
+   - behavioural: no CV can demonstrate it, only an interview can. Character and
+     disposition — "self-motivated", "keen to learn", "excellent eye for detail",
+     "passionate", "team player", "thrives under pressure".
+   This is not about whether THIS candidate has it. It is about whether the
+   document type can carry the evidence. Marking a disposition as evidenceable
+   penalises the candidate for a limitation of the medium, so when a requirement
+   mixes both — "strong communication skills (English is a must)" — split it if
+   each half stands alone, and otherwise label it behavioural.
 Return at most 12 requirements, most important first.
 """
 
 FORMAT = json_only(
     '{"requirements": [{"text": "<one sentence>", '
-    '"category": "must_have" | "nice_to_have"}]}'
+    '"category": "must_have" | "nice_to_have", '
+    '"kind": "evidenceable" | "behavioural"}]}'
 )
 
 

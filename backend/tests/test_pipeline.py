@@ -522,3 +522,33 @@ def test_a_claim_never_survives_its_citation(auth_client, ready_session):
             )
         else:
             assert item["evidence_quote"] is None
+
+
+def test_behavioural_requirements_are_excluded_from_the_score(auth_client, ready_session):
+    """No CV can evidence "keen to learn", so counting it as missing marks the
+    candidate down for a limitation of the document type.
+
+    This worked only under the deterministic provider, which classifies by rule.
+    The extraction prompt never asked a real model for the field, so every
+    requirement defaulted to evidenceable and the exclusion silently stopped.
+    """
+    report = auth_client.post(f"/api/v1/sessions/{ready_session}/analysis").json()
+    credit = {"strong": 1.0, "partial": 0.5, "missing": 0.0}
+
+    evidenceable = [i for i in report["items"] if i["kind"] == "evidenceable"]
+    assert evidenceable, "something must be scoreable"
+
+    total = sum(2 if i["category"] == "must_have" else 1 for i in evidenceable)
+    earned = sum(credit[i["status"]] * (2 if i["category"] == "must_have" else 1)
+                 for i in evidenceable)
+    assert report["overall_score"] == round(100 * earned / total), (
+        "the score must be the arithmetic over evidenceable requirements only"
+    )
+
+
+def test_the_counts_shown_match_the_requirements_scored(auth_client, ready_session):
+    """The chips say "N evidenced"; they must count the same set the score does."""
+    report = auth_client.post(f"/api/v1/sessions/{ready_session}/analysis").json()
+    scored = [i for i in report["items"] if i["kind"] == "evidenceable"]
+    for status, shown in report["counts"].items():
+        assert shown == sum(1 for i in scored if i["status"] == status), status

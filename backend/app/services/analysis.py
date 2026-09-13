@@ -149,6 +149,8 @@ def run_analysis(
         db.delete(existing)
         db.commit()
 
+    kinds = [r.get("kind", "evidenceable") for r in requirements]
+
     report = MatchReport(
         session_id=session.id or 0,
         overall_score=report_out.overall_score,
@@ -157,16 +159,29 @@ def run_analysis(
         prompt_version=analyse_match.VERSION,
         model=settings.openai_chat_model_large,
     )
+    # The score is arithmetic over the verdicts, so the server computes it rather
+    # than trusting the model's. Two reasons: the model is not told which
+    # requirements are behavioural, so its own total silently included the ones
+    # the interface says are excluded; and a weighted mean is exactly the kind of
+    # sum a language model gets slightly wrong, which is why the contract needed
+    # a rounding validator in the first place.
+    report.overall_score = _score(report_out.items, kinds)
+
     db.add(report)
     db.commit()
     db.refresh(report)
 
+    # `kind` is decided once, at extraction, and carried through. The judging
+    # stage does not re-derive it: it is a property of the requirement, not of
+    # how well this CV happens to meet it, and asking two stages the same
+    # question is how they come to disagree. The model's own value is the
+    # fallback for the case where the two lists have drifted out of step.
     for order, item in enumerate(report_out.items):
         db.add(MatchItem(
             report_id=report.id or 0,
             requirement=item.requirement,
             category=item.category,
-            kind=item.kind,
+            kind=kinds[order] if order < len(kinds) else item.kind,
             status=item.status,
             confidence=item.confidence,
             evidence_quote=item.evidence_quote,
@@ -181,6 +196,29 @@ def run_analysis(
     db.commit()
     db.refresh(report)
     return report
+
+
+_CREDIT = {"strong": 1.0, "partial": 0.5, "missing": 0.0}
+
+
+def _score(items, kinds: list[str]) -> int:
+    """Weighted percentage over the requirements a CV could actually evidence.
+
+    Behavioural requirements are excluded: counting "keen to learn" as missing
+    marks the candidate down for a limitation of the document type, not of their
+    experience. They are surfaced as interview questions instead.
+
+    must_have counts twice, matching what the prompt asks the model to do and
+    what the interface tells the user.
+    """
+    total = earned = 0.0
+    for i, item in enumerate(items):
+        if (kinds[i] if i < len(kinds) else item.kind) != "evidenceable":
+            continue
+        weight = 2.0 if item.category == "must_have" else 1.0
+        total += weight
+        earned += weight * _CREDIT.get(item.status, 0.0)
+    return round(100 * earned / total) if total else 0
 
 
 def get_report(session_id: int, db: Session) -> tuple[MatchReport | None, list[MatchItem]]:
