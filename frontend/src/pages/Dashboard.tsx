@@ -4,16 +4,22 @@ import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import type { SessionOut } from "../api/types";
 import { Chip, ErrorBox, Head, Row, Spinner, toneForScore } from "../components/bits";
+import { useT } from "../lib/i18n";
 
-function statusLabel(s: SessionOut): string {
-  if (s.readiness_score != null) return "Scored";
-  if (s.answered_count > 0) return `${s.answered_count} answered`;
-  if (s.has_analysis) return "Analysed";
-  if (s.documents.length === 2) return "Ready";
-  return "Needs documents";
+function useStatusLabel() {
+  const { t } = useT();
+  return (s: SessionOut): string => {
+    if (s.readiness_score != null) return t("dash.scored");
+    if (s.answered_count > 0) return t("dash.answered", { n: s.answered_count });
+    if (s.has_analysis) return t("dash.analysed");
+    if (s.documents.length === 2) return t("dash.ready");
+    return t("dash.needsDocs");
+  };
 }
 
 export function Dashboard() {
+  const { t } = useT();
+  const statusLabel = useStatusLabel();
   const [sessions, setSessions] = useState<SessionOut[] | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [title, setTitle] = useState("");
@@ -53,18 +59,17 @@ export function Dashboard() {
 
   return (
     <div className="sheet">
-      <Head margin={<span className="label">Your file</span>}>
-        <h1 className="display h1">Sessions</h1>
+      <Head margin={<span className="label">{t("nav.sessions")}</span>}>
+        <h1 className="display h1">{t("dash.title")}</h1>
         <p className="prose" style={{ marginBottom: 0 }}>
-          One session pairs a CV with a job description. Everything else — the gap
-          analysis, the questions, the scorecard — is derived from that pair.
+          {t("dash.lead")}
         </p>
       </Head>
 
-      <Row margin={<span className="label">New</span>}>
+      <Row margin={<span className="label">{t("dash.new")}</span>}>
         <form onSubmit={create}>
           <div className="field">
-            <label className="label" htmlFor="title">Session name</label>
+            <label className="label" htmlFor="title">{t("dash.name")}</label>
             <input
               id="title" className="input" required minLength={2} value={title}
               placeholder="Meridian Labs — Senior Backend"
@@ -72,26 +77,26 @@ export function Dashboard() {
             />
           </div>
           <div className="field">
-            <label className="label" htmlFor="role">Target role</label>
+            <label className="label" htmlFor="role">{t("dash.role")}</label>
             <input
               id="role" className="input" value={role}
               placeholder="Senior Backend Engineer (Python)"
               onChange={(e) => setRole(e.target.value)}
             />
-            <span className="hint">Used to shape the behavioural questions.</span>
+            <span className="hint">{t("dash.roleHint")}</span>
           </div>
           <ErrorBox error={error} />
           <button className="btn" disabled={busy || title.trim().length < 2}>
-            {busy ? "Creating…" : "Create session"}
+            {busy ? t("dash.creating") : t("dash.create")}
           </button>
         </form>
       </Row>
 
-      <Row margin={<span className="label">Existing</span>}>
+      <Row margin={<span className="label">{t("dash.existing")}</span>}>
         {sessions === null ? (
-          <Spinner label="Loading sessions…" />
+          <Spinner label={t("common.loading")} />
         ) : sessions.length === 0 ? (
-          <p className="prose">Nothing here yet. Create your first session above.</p>
+          <p className="prose">{t("dash.empty")}</p>
         ) : (
           <div className="cards">
             {sessions.map((s) => (
@@ -109,7 +114,7 @@ export function Dashboard() {
                     <p className="num" style={{ fontSize: "1.6rem", margin: "0.4rem 0 0",
                          color: `var(--${toneForScore(s.readiness_score)})` }}>
                       {s.readiness_score}
-                      <span className="gauge__d"> /100 ready</span>
+                      <span className="gauge__d"> {t("score.readySuffix")}</span>
                     </p>
                   ) : null}
                 </Link>
@@ -119,15 +124,15 @@ export function Dashboard() {
                     reachable — and has to confirm first. */}
                 {confirming === s.id ? (
                   <div className="split card__confirm">
-                    <span className="hint">Delete this session and its documents?</span>
-                    <button className="btn btn--sm" onClick={() => remove(s.id)}>Delete</button>
+                    <span className="hint">{t("dash.confirmDelete")}</span>
+                    <button className="btn btn--sm" onClick={() => remove(s.id)}>{t("common.delete")}</button>
                     <button className="btn btn--ghost btn--sm"
-                            onClick={() => setConfirming(null)}>Keep</button>
+                            onClick={() => setConfirming(null)}>{t("common.keep")}</button>
                   </div>
                 ) : (
                   <button className="btn btn--link card__delete"
                           onClick={() => setConfirming(s.id)}>
-                    Delete
+                    {t("common.delete")}
                   </button>
                 )}
               </div>

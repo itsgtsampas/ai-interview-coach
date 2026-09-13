@@ -9,6 +9,7 @@ import { Rail } from "./components/Rail";
 import { TopBar } from "./components/TopBar";
 import { ErrorBox, Head, Spinner } from "./components/bits";
 import { AuthProvider, useAuth } from "./lib/auth";
+import { I18nProvider } from "./lib/i18n";
 import { Coach } from "./pages/Coach";
 import { Dashboard } from "./pages/Dashboard";
 import { Letter } from "./pages/Letter";
@@ -125,10 +126,12 @@ function Routing() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <Router>
-        <Routing />
-      </Router>
-    </AuthProvider>
+    <I18nProvider>
+      <AuthProvider>
+        <Router>
+          <Routing />
+        </Router>
+      </AuthProvider>
+    </I18nProvider>
   );
 }

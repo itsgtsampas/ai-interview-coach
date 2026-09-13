@@ -5,6 +5,7 @@ import { api, ApiError } from "../api/client";
 import type { CoverLetter, LetterTone, SessionOut } from "../api/types";
 import { ErrorBox, Head, Row, Spinner } from "../components/bits";
 import { streamRequest } from "../lib/sse";
+import { useT } from "../lib/i18n";
 
 interface Ctx { session: SessionOut | null; refresh: () => Promise<void> }
 
@@ -16,6 +17,7 @@ const TONES: { value: LetterTone; label: string; note: string }[] = [
 
 export function Letter() {
   const { session } = useOutletContext<Ctx>();
+  const { t } = useT();
   const [letter, setLetter] = useState<CoverLetter | null>(null);
   const [tone, setTone] = useState<LetterTone>("plain");
   const [streamed, setStreamed] = useState("");
@@ -81,8 +83,8 @@ export function Letter() {
 
   return (
     <div className="sheet">
-      <Head margin={<span className="label">Stage 5</span>}>
-        <h1 className="display h1">Cover letter</h1>
+      <Head margin={<span className="label">{t("stage.label")} 5</span>}>
+        <h1 className="display h1">{t("letter.title")}</h1>
         <p className="prose" style={{ marginBottom: 0 }}>
           Written from the requirements your CV actually evidenced, and from the
           sentences that evidenced them. Anything the gap analysis could not find
@@ -90,8 +92,8 @@ export function Letter() {
         </p>
       </Head>
 
-      <Row margin={<span className="label">Tone</span>}>
-        <div className="tones" role="radiogroup" aria-label="Tone">
+      <Row margin={<span className="label">{t("letter.tone")}</span>}>
+        <div className="tones" role="radiogroup" aria-label={t("letter.tone")}>
           {TONES.map((t) => (
             <button
               key={t.value}
@@ -111,11 +113,11 @@ export function Letter() {
         <ErrorBox error={error} />
         <div className="split mt">
           <button className="btn" onClick={write} disabled={busy || !session}>
-            {busy ? "Writing…" : letter ? "Rewrite" : "Write the letter"}
+            {busy ? t("letter.writing") : letter ? t("letter.rewrite") : t("letter.write")}
           </button>
           {busy ? (
             <button className="btn btn--ghost" onClick={() => abort.current?.abort()}>
-              Stop
+              {t("letter.stop")}
             </button>
           ) : null}
         </div>
@@ -125,10 +127,10 @@ export function Letter() {
         <Row
           margin={
             <>
-              <span className="label">Draft</span>
+              <span className="label">{t("letter.draft")}</span>
               {letter ? (
                 <button className="btn btn--link" onClick={copy}>
-                  {copied ? "Copied" : "Copy"}
+                  {copied ? t("common.copied") : t("common.copy")}
                 </button>
               ) : null}
             </>
@@ -149,7 +151,7 @@ export function Letter() {
 
           {letter?.claims_used.length ? (
             <div className="mt">
-              <span className="label">Built from</span>
+              <span className="label">{t("letter.builtFrom")}</span>
               <ul className="list list--bullet claims">
                 {letter.claims_used.map((c) => <li key={c}>{c}</li>)}
               </ul>
@@ -162,7 +164,7 @@ export function Letter() {
         </Row>
       ) : null}
 
-      <Row margin={<span className="label">Next</span>}>
+      <Row margin={<span className="label">{t("common.next")}</span>}>
         <div className="split">
           <Link className="btn btn--ghost" to={`/session/${session?.id}/scorecard`}>
             Back to the scorecard

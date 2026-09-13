@@ -6,27 +6,30 @@ import type { Answer, Question, SessionOut } from "../api/types";
 import {
   Chip, ErrorBox, Head, Row, Spinner, toneForScore,
 } from "../components/bits";
+import { useCriterion, useT } from "../lib/i18n";
 import { BulletBar } from "../components/gauges";
 import { streamRequest } from "../lib/sse";
 
 interface Ctx { session: SessionOut | null; refresh: () => Promise<void> }
 
 function Feedback({ answer }: { answer: Answer }) {
+  const { t } = useT();
+  const crit = useCriterion();
   const e = answer.evaluation;
   if (!e) return null;
-  const scores = Object.fromEntries(e.criteria.map((c) => [c.name, c.score]));
+  const scores = Object.fromEntries(e.criteria.map((c) => [crit(c.name), c.score]));
   return (
     <>
       <Row
         margin={
           <>
-            <span className="label">Score</span>
+            <span className="label">{t("room.score")}</span>
             <span className="num" style={{ fontSize: "2rem",
                  color: `var(--${toneForScore(e.overall_score, 5)})` }}>
               {e.overall_score.toFixed(1)}
             </span>
             <span className="label">out of 5</span>
-            <Chip tone="neutral">{e.rubric === "star" ? "STAR rubric" : "Technical rubric"}</Chip>
+            <Chip tone="neutral">{e.rubric === "star" ? t("room.starRubric") : t("room.technicalRubric")}</Chip>
           </>
         }
       >
@@ -37,28 +40,28 @@ function Feedback({ answer }: { answer: Answer }) {
                        benchmark={3.5} index={i} />
           ))}
         <details className="disclose">
-          <summary>Why this score</summary>
+          <summary>{t("room.whyScore")}</summary>
           <p className="reasoning">{e.reasoning}</p>
         </details>
       </Row>
 
-      <Row margin={<span className="label">What worked</span>}>
+      <Row margin={<span className="label">{t("room.whatWorked")}</span>}>
         <ul className="list list--bullet">
           {e.strengths.map((s) => <li key={s}>{s}</li>)}
         </ul>
       </Row>
 
-      <Row margin={<span className="label">Fix next</span>}>
+      <Row margin={<span className="label">{t("room.fixNext")}</span>}>
         <ul className="list list--bullet">
           {e.improvements.map((s) => <li key={s}>{s}</li>)}
         </ul>
       </Row>
 
-      <Row margin={<span className="label">A stronger shape</span>}>
+      <Row margin={<span className="label">{t("room.strongerShape")}</span>}>
         <p className="prose" style={{ margin: 0, fontSize: "0.89rem" }}>{e.model_answer}</p>
       </Row>
 
-      <Row margin={<span className="label">They would ask</span>}>
+      <Row margin={<span className="label">{t("room.theyWouldAsk")}</span>}>
         <p className="display h3" style={{ fontWeight: 500 }}>“{e.follow_up_question}”</p>
       </Row>
     </>
@@ -67,6 +70,7 @@ function Feedback({ answer }: { answer: Answer }) {
 
 export function Room() {
   const { session, refresh } = useOutletContext<Ctx>();
+  const { t } = useT();
   const [questions, setQuestions] = useState<Question[] | null>(null);
   const [index, setIndex] = useState(0);
   const [text, setText] = useState("");
@@ -148,20 +152,20 @@ export function Room() {
     }
   }
 
-  if (!questions) return <div className="sheet"><Spinner label="Loading questions…" /></div>;
+  if (!questions) return <div className="sheet"><Spinner label={t("common.loading")} /></div>;
 
   if (questions.length === 0) {
     return (
       <div className="sheet">
-        <Head margin={<span className="label">Stage 3</span>}>
-          <h1 className="display h1">Practice</h1>
+        <Head margin={<span className="label">{t("stage.label")} 3</span>}>
+          <h1 className="display h1">{t("room.title")}</h1>
           <p className="prose">
             Eight questions, drawn from your gap analysis. The requirements with no
             evidence come first — those are the ones an interviewer will find.
           </p>
           <ErrorBox error={error} />
           <button className="btn" onClick={generate} disabled={busy}>
-            {busy ? "Writing questions…" : "Generate questions"}
+            {busy ? t("room.generating") : t("room.generate")}
           </button>
         </Head>
       </div>
@@ -173,12 +177,12 @@ export function Room() {
       <Head
         margin={
           <>
-            <span className="label">Stage 3</span>
+            <span className="label">{t("stage.label")} 3</span>
             <span className="label">{progress} of {questions.length} answered</span>
           </>
         }
       >
-        <h1 className="display h1">Practice</h1>
+        <h1 className="display h1">{t("room.title")}</h1>
         <div className="split">
           {questions.map((q, i) => (
             <button
@@ -211,7 +215,7 @@ export function Room() {
                 <span className="qlist__tags">
                   <span className="label">{q.category}</span>
                   {q.answered ? (
-                    <span className="verdict" data-v="strong">Answered</span>
+                    <span className="verdict" data-v="strong">{t("room.answered")}</span>
                   ) : null}
                 </span>
               </li>
@@ -240,19 +244,19 @@ export function Room() {
             <p className="hint" style={{ marginTop: "0.7rem" }}>{current.rationale}</p>
           </Row>
 
-          <Row margin={<span className="label">Your answer</span>}>
+          <Row margin={<span className="label">{t("room.yourAnswer")}</span>}>
             <textarea
               className="textarea"
               value={text}
               readOnly={!!answer}
-              placeholder="Answer out loud first, then type what you actually said. Aim for 90 seconds of speech."
+              placeholder={t("room.placeholder")}
               onChange={(e) => setText(e.target.value)}
             />
             {/* Each stage the server reports, ticked off as it completes. The
                 live region announces only the newest line, so a screen reader
                 is not read the whole list again on every update. */}
             {busy || stages.length ? (
-              <ol className="stages" aria-label="Scoring progress">
+              <ol className="stages" aria-label={t("room.progressLabel")}>
                 {stages.map((label, i) => (
                   <li key={`${label}-${i}`} className="stages__s"
                       data-state={i === stages.length - 1 && busy ? "now" : "done"}>
@@ -269,16 +273,16 @@ export function Room() {
             <div className="split" style={{ marginTop: "0.7rem" }}>
               {!answer ? (
                 <button className="btn" onClick={submit} disabled={busy || text.trim().length < 10}>
-                  {busy ? "Scoring…" : "Submit for scoring"}
+                  {busy ? t("room.scoring") : t("room.submit")}
                 </button>
               ) : (
                 <button className="btn btn--ghost" onClick={() => { setAnswer(null); setSeconds(0); }}>
-                  Answer again
+                  {t("room.again")}
                 </button>
               )}
               {index < questions.length - 1 ? (
                 <button className="btn btn--ghost" onClick={() => setIndex(index + 1)}>
-                  Next question
+                  {t("room.nextQuestion")}
                 </button>
               ) : (
                 <Link className="btn btn--ghost" to={`/session/${session?.id}/scorecard`}>

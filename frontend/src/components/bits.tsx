@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import type { EvidenceStatus } from "../api/types";
+import { useT, type Key } from "../lib/i18n";
 
 /* --- layout: the sheet and its working margin ---------------------------- */
 
@@ -24,16 +25,17 @@ export function Row({ margin, children }: { margin?: ReactNode; children: ReactN
 
 /* --- the verdict chip: the only colour in the interface ------------------ */
 
-const VERDICT_COPY: Record<EvidenceStatus, string> = {
-  strong: "Evidenced",
-  partial: "Thin",
-  missing: "No evidence",
+const VERDICT_KEY: Record<EvidenceStatus, Key> = {
+  strong: "verdict.strong",
+  partial: "verdict.partial",
+  missing: "verdict.missing",
 };
 
 export function Verdict({ status }: { status: EvidenceStatus }) {
+  const { t } = useT();
   return (
     <span className="verdict" data-v={status}>
-      {VERDICT_COPY[status]}
+      {t(VERDICT_KEY[status])}
     </span>
   );
 }
@@ -51,6 +53,15 @@ export function Chip({ children, tone = "neutral" }: { children: ReactNode; tone
    where that sentence lives. If there is no quote, the absence is stated
    rather than hidden — that is the honest case, not a rendering failure.     */
 
+function EvidenceAbsent() {
+  const { t } = useT();
+  return (
+    <p className="evidence evidence--none" style={{ ["--verdict" as string]: "var(--rule)" }}>
+      {t("common.noEvidenceLine")}
+    </p>
+  );
+}
+
 export function EvidenceLine({
   quote,
   page,
@@ -63,11 +74,7 @@ export function EvidenceLine({
   status: EvidenceStatus;
 }) {
   if (!quote) {
-    return (
-      <p className="evidence evidence--none" style={{ ["--verdict" as string]: "var(--rule)" }}>
-        No sentence in the CV supports this.
-      </p>
-    );
+    return <EvidenceAbsent />;
   }
   const source = ["CV", section || null, page ? `p.${page}` : null]
     .filter(Boolean)

@@ -4,6 +4,7 @@ import { useOutletContext } from "react-router-dom";
 import { api } from "../api/client";
 import type { CoachStep, SessionOut } from "../api/types";
 import { ErrorBox, Head, Row, Spinner } from "../components/bits";
+import { useT } from "../lib/i18n";
 
 interface Ctx { session: SessionOut | null }
 
@@ -22,6 +23,7 @@ const SUGGESTIONS = [
 
 export function Coach() {
   const { session } = useOutletContext<Ctx>();
+  const { t } = useT();
   const [turns, setTurns] = useState<Turn[]>([]);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -44,8 +46,8 @@ export function Coach() {
 
   return (
     <div className="sheet">
-      <Head margin={<span className="label">Stage 6</span>}>
-        <h1 className="display h1">Coach</h1>
+      <Head margin={<span className="label">{t("stage.label")} 6</span>}>
+        <h1 className="display h1">{t("coach.title")}</h1>
         <p className="prose" style={{ marginBottom: 0 }}>
           The coach can read your CV, the job description, your gap analysis and your
           scores. It decides which of those to consult for each question, and shows you
@@ -106,7 +108,7 @@ export function Coach() {
           <input
             className="input"
             value={message}
-            placeholder="Ask about your CV, the role, or your scores"
+            placeholder={t("coach.placeholder")}
             onChange={(e) => setMessage(e.target.value)}
           />
           <button className="btn" disabled={busy || message.trim().length < 3}>Ask</button>

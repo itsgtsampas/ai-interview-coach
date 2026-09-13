@@ -10,6 +10,7 @@ import { useId } from "react";
 
 import { toneForScore } from "./bits";
 import { useCountUp, useMounted, usePrefersReducedMotion } from "../lib/motion";
+import { useT } from "../lib/i18n";
 
 /** The two points where the verdict changes, as fractions of the scale. */
 const THRESHOLDS = [
@@ -43,6 +44,7 @@ export function ArcGauge({
   caption?: string;
   suffix?: string;
 }) {
+  const { t } = useT();
   const reduced = usePrefersReducedMotion();
   const mounted = useMounted(60);
   const shown = useCountUp(value);
@@ -63,7 +65,7 @@ export function ArcGauge({
   return (
     <figure className="arc" role="img" aria-labelledby={labelId}>
       <figcaption id={labelId} className="visually-hidden">
-        {`${Math.round(value)} out of ${max}${band ? `, ${band}` : ""}`}
+        {t("score.outOf", { n: Math.round(value), max }) + (band ? `, ${band}` : "")}
       </figcaption>
 
       {/* Fixed square dial, flowing labels, so a long band name wraps. */}

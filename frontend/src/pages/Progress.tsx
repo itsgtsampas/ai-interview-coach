@@ -5,6 +5,7 @@ import { api } from "../api/client";
 import type { Progress as ProgressData } from "../api/types";
 import { DataTable, Delta, Sparkline, Stat, Trend } from "../components/charts";
 import { ArcGauge } from "../components/gauges";
+import { useCriterion, useT } from "../lib/i18n";
 import { Empty, ErrorBox, Head, Row, Spinner, toneForScore } from "../components/bits";
 
 function shortDate(iso: string): string {
@@ -13,6 +14,8 @@ function shortDate(iso: string): string {
 
 export function Progress() {
   const [data, setData] = useState<ProgressData | null>(null);
+  const { t } = useT();
+  const crit = useCriterion();
   const [error, setError] = useState<unknown>(null);
 
   useEffect(() => {
@@ -20,12 +23,12 @@ export function Progress() {
   }, []);
 
   if (error) return <div className="sheet"><ErrorBox error={error} /></div>;
-  if (!data) return <div className="sheet"><Spinner label="Reading your sessions…" /></div>;
+  if (!data) return <div className="sheet"><Spinner label={t("common.loading")} /></div>;
 
   if (data.sessions_total === 0) {
     return (
       <div className="sheet">
-        <Head margin={<span className="label">Across sessions</span>}>
+        <Head margin={<span className="label">{t("progress.acrossSessions")}</span>}>
           <Empty title="Nothing to compare yet">
             <p>
               This page comes alive once you have run more than one application. It
@@ -48,8 +51,8 @@ export function Progress() {
 
   return (
     <div className="sheet">
-      <Head margin={<span className="label">Across sessions</span>}>
-        <h1 className="display h1">Progress</h1>
+      <Head margin={<span className="label">{t("progress.acrossSessions")}</span>}>
+        <h1 className="display h1">{t("progress.title")}</h1>
         <p className="prose" style={{ marginBottom: 0 }}>
           Every other page judges one application. This one looks at all
           {" "}{data.sessions_total} of them together, which is the only place a
@@ -58,29 +61,29 @@ export function Progress() {
       </Head>
 
       {/* --- the headline figures ------------------------------------------ */}
-      <Row margin={<span className="label">Where you are</span>}>
+      <Row margin={<span className="label">{t("progress.whereYouAre")}</span>}>
         <div className="statrow">
           {data.latest_readiness !== null ? (
-            <ArcGauge value={data.latest_readiness} band="Latest readiness" />
+            <ArcGauge value={data.latest_readiness} band={t("progress.latest")} />
           ) : null}
           <div className="stats">
             <Stat
-              label="Sessions"
+              label={t("progress.sessions")}
               value={data.sessions_total}
               note={`${data.sessions_scored} scored`}
             />
             {data.mean_match !== null ? (
               <Stat
-                label="Average CV match"
+                label={t("progress.avgMatch")}
                 value={data.mean_match}
                 suffix="/100"
                 tone={toneForScore(data.mean_match)}
               />
             ) : null}
-            <Stat label="Answers practised" value={data.answers_total} />
+            <Stat label={t("progress.answers")} value={data.answers_total} />
             {data.mean_answer_score !== null ? (
               <Stat
-                label="Average answer"
+                label={t("progress.avgAnswer")}
                 value={data.mean_answer_score.toFixed(1)}
                 suffix="/5"
                 tone={toneForScore(data.mean_answer_score, 5)}
@@ -101,7 +104,7 @@ export function Progress() {
       </Row>
 
       {/* --- the trend, or an honest refusal to draw one -------------------- */}
-      <Row margin={<span className="label">Readiness</span>}>
+      <Row margin={<span className="label">{t("progress.readiness")}</span>}>
         {data.has_trend ? (
           <>
             <Trend
@@ -151,7 +154,7 @@ export function Progress() {
 
       {/* --- the actual insight -------------------------------------------- */}
       {data.recurring_gaps.length ? (
-        <Row margin={<span className="label">Keeps costing you</span>}>
+        <Row margin={<span className="label">{t("progress.keepsCosting")}</span>}>
           <p className="prose">
             These went unevidenced in more than one application. A gap in one posting
             is a mismatch; the same gap in several is the thing to go and learn.
@@ -177,7 +180,7 @@ export function Progress() {
       {data.competencies.length ? (
         <Row margin={<span className="label">Competencies</span>}>
           <p className="prose">
-            Averaged per session, weakest movement first. Each is scored out of five.
+            {t("progress.competencyNote")}
           </p>
           <table className="table table--trend">
             <thead>
@@ -192,7 +195,7 @@ export function Progress() {
             <tbody>
               {data.competencies.map((c) => (
                 <tr key={c.name}>
-                  <th scope="row">{c.name}</th>
+                  <th scope="row">{crit(c.name)}</th>
                   <td><Sparkline values={c.points} /></td>
                   <td className="num">{c.first.toFixed(1)}</td>
                   <td className="num" style={{ color: `var(--${toneForScore(c.latest, 5)})` }}>
@@ -206,7 +209,7 @@ export function Progress() {
         </Row>
       ) : null}
 
-      <Row margin={<span className="label">All sessions</span>}>
+      <Row margin={<span className="label">{t("progress.allSessions")}</span>}>
         <div className="pointlist">
           {[...data.points].reverse().map((p) => (
             <Link key={p.session_id} to={`/session/${p.session_id}/report`}

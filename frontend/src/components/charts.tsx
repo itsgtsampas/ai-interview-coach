@@ -10,6 +10,7 @@ import { useId, useRef, useState } from "react";
 
 import { toneForScore } from "./bits";
 import { useCountUp, useMounted, usePrefersReducedMotion } from "../lib/motion";
+import { useT } from "../lib/i18n";
 
 /* --- shared geometry ----------------------------------------------------- */
 
@@ -269,9 +270,10 @@ export function DataTable({
   columns: string[];
   rows: (string | number)[][];
 }) {
+  const { t } = useT();
   return (
     <details className="disclose datatable">
-      <summary>Show the numbers</summary>
+      <summary>{t("progress.showNumbers")}</summary>
       <div className="datatable__scroll">
         <table className="table">
           <caption className="hint">{caption}</caption>

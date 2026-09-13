@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { api } from "../api/client";
 import { ErrorBox, Spinner } from "./bits";
+import { useT } from "../lib/i18n";
 
 /** Download the scorecard.
  *
@@ -11,6 +12,7 @@ import { ErrorBox, Spinner } from "./bits";
  *  the life of the tab.
  */
 export function DownloadPdf({ sessionId }: { sessionId: number }) {
+  const { t } = useT();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
 
@@ -36,7 +38,7 @@ export function DownloadPdf({ sessionId }: { sessionId: number }) {
   return (
     <>
       <button className="btn btn--ghost" onClick={download} disabled={busy}>
-        {busy ? <Spinner label="Building…" /> : (
+        {busy ? <Spinner label={t("score.building")} /> : (
           <>
             <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true"
                  className="btn__icon">
@@ -44,7 +46,7 @@ export function DownloadPdf({ sessionId }: { sessionId: number }) {
                     fill="none" stroke="currentColor" strokeWidth="1.6"
                     strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-            Download PDF
+            {t("score.download")}
           </>
         )}
       </button>

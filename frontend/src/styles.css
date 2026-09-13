@@ -1938,3 +1938,37 @@ details.disclose[open] > summary::before {
     transition: none;
   }
 }
+
+/* --- language switcher, inside the account menu --------------------------- */
+
+.menu__lang {
+  display: flex;
+  gap: 2px;
+  padding: 0.35rem 0.5rem 0.5rem;
+  border-bottom: 1px solid var(--rule-2);
+  margin-bottom: 0.3rem;
+}
+
+.menu__langbtn {
+  flex: 1;
+  padding: 0.3rem 0.4rem;
+  font: inherit;
+  font-size: 0.78rem;
+  color: var(--ink-2);
+  background: none;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.menu__langbtn:hover {
+  background: var(--paper-2);
+  border-color: var(--ink-3);
+}
+
+.menu__langbtn[data-on="true"] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper-2);
+}

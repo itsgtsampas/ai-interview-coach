@@ -3,6 +3,7 @@ import { useState } from "react";
 import { api } from "../api/client";
 import type { EvidenceStatus, Suggestion } from "../api/types";
 import { ErrorBox, Spinner } from "./bits";
+import { useT } from "../lib/i18n";
 
 /** Highlight the [placeholders] so the template reads as a template.
  *
@@ -32,6 +33,7 @@ export function RewriteCard({
   status: EvidenceStatus;
   existing?: Suggestion;
 }) {
+  const { t } = useT();
   const [suggestion, setSuggestion] = useState<Suggestion | null>(existing ?? null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
@@ -63,7 +65,7 @@ export function RewriteCard({
     return (
       <div className="rewrite rewrite--ask">
         <button className="btn btn--sm btn--ghost" onClick={ask} disabled={busy}>
-          {busy ? <Spinner label="Drafting…" /> : "Suggest a CV bullet"}
+          {busy ? <Spinner label={t("common.loading")} /> : t("report.suggestBullet")}
         </button>
         <span className="hint">
           {status === "partial"
@@ -78,21 +80,20 @@ export function RewriteCard({
   return (
     <div className="rewrite">
       <div className="between rewrite__top">
-        <span className="label">Suggested bullet</span>
+        <span className="label">{t("report.suggestedBullet")}</span>
         <button className="btn btn--link" onClick={copy}>
-          {copied ? "Copied" : "Copy"}
+          {copied ? t("common.copied") : t("common.copy")}
         </button>
       </div>
 
       <Bullet text={suggestion.bullet} />
 
       <p className="hint rewrite__slots">
-        The highlighted parts are yours to fill in. Nothing in this bullet is a claim
-        about you until you make it one.
+        {t("report.slotsNote")}
       </p>
 
       {suggestion.premise ? (
-        <p className="prose rewrite__p"><strong>Why this shape:</strong> {suggestion.premise}</p>
+        <p className="prose rewrite__p"><strong>{t("report.whyShape")}</strong> {suggestion.premise}</p>
       ) : null}
       {suggestion.why ? <p className="prose rewrite__p">{suggestion.why}</p> : null}
       {suggestion.if_you_cannot ? (

@@ -6,6 +6,7 @@ import type { Scorecard, SessionOut } from "../api/types";
 import { Chip, ErrorBox, Head, Row, Spinner } from "../components/bits";
 import { ArcGauge, BulletBar } from "../components/gauges";
 import { DownloadPdf } from "../components/DownloadPdf";
+import { useBand, useCriterion, useT } from "../lib/i18n";
 
 interface Ctx { session: SessionOut | null; refresh: () => Promise<void> }
 
@@ -13,6 +14,9 @@ const PRIORITY_TONE = { high: "missing", medium: "partial", low: "neutral" } as 
 
 export function ScorecardPage() {
   const { session, refresh } = useOutletContext<Ctx>();
+  const { t } = useT();
+  const band = useBand();
+  const crit = useCriterion();
   const [card, setCard] = useState<Scorecard | null>(null);
   const [missing, setMissing] = useState(false);
   const [error, setError] = useState<unknown>(null);
@@ -46,8 +50,8 @@ export function ScorecardPage() {
   if (missing) {
     return (
       <div className="sheet">
-        <Head margin={<span className="label">Stage 4</span>}>
-          <h1 className="display h1">Scorecard</h1>
+        <Head margin={<span className="label">{t("stage.label")} 4</span>}>
+          <h1 className="display h1">{t("score.title")}</h1>
           <p className="prose">
             The scorecard combines your CV match with how you actually answered. Answer at
             least one question first.
@@ -55,7 +59,7 @@ export function ScorecardPage() {
           <ErrorBox error={error} />
           <div className="split">
             <button className="btn" onClick={build} disabled={busy}>
-              {busy ? "Building…" : "Build scorecard"}
+              {busy ? t("score.building") : t("score.build")}
             </button>
             <Link className="btn btn--ghost" to={`/session/${session?.id}/room`}>
               Back to practice
@@ -66,14 +70,14 @@ export function ScorecardPage() {
     );
   }
 
-  if (!card) return <div className="sheet"><Spinner label="Loading scorecard…" /></div>;
+  if (!card) return <div className="sheet"><Spinner label={t("common.loading")} /></div>;
 
   return (
     <div className="sheet">
-      <Head margin={<span className="label">Stage 4</span>}>
-        <h1 className="display h1">Scorecard</h1>
+      <Head margin={<span className="label">{t("stage.label")} 4</span>}>
+        <h1 className="display h1">{t("score.title")}</h1>
         <div className="scorehead">
-          <ArcGauge value={card.readiness_score} band={card.readiness_band} />
+          <ArcGauge value={card.readiness_score} band={band(card.readiness_band)} />
           <div>
             <p className="prose scorehead__sum">{card.summary}</p>
             <DownloadPdf sessionId={card.session_id} />
@@ -83,11 +87,11 @@ export function ScorecardPage() {
       </Head>
 
       {Object.keys(card.competencies).length ? (
-        <Row margin={<span className="label">Competencies</span>}>
+        <Row margin={<span className="label">{t("score.competencies")}</span>}>
           {Object.entries(card.competencies)
             .sort((a, b) => a[1] - b[1])
             .map(([name, value], i) => (
-              <BulletBar key={name} label={name} value={value} max={5}
+              <BulletBar key={name} label={crit(name)} value={value} max={5}
                          benchmark={3.5} index={i} />
             ))}
           <p className="hint" style={{ marginTop: "0.8rem" }}>
@@ -98,7 +102,7 @@ export function ScorecardPage() {
       ) : null}
 
       {card.strengths.length ? (
-        <Row margin={<span className="label">Strengths</span>}>
+        <Row margin={<span className="label">{t("score.strengths")}</span>}>
           <ul className="list list--bullet">
             {card.strengths.map((s) => <li key={s}>{s}</li>)}
           </ul>
@@ -106,14 +110,14 @@ export function ScorecardPage() {
       ) : null}
 
       {card.gaps.length ? (
-        <Row margin={<span className="label">Gaps</span>}>
+        <Row margin={<span className="label">{t("score.gaps")}</span>}>
           <ul className="list list--bullet">
             {card.gaps.map((s) => <li key={s}>{s}</li>)}
           </ul>
         </Row>
       ) : null}
 
-      <Row margin={<span className="label">Do this next</span>}>
+      <Row margin={<span className="label">{t("score.doNext")}</span>}>
         {card.action_items.map((a) => (
           <div className="action" key={a.title}>
             <div>
@@ -124,7 +128,7 @@ export function ScorecardPage() {
               {a.why ? <p className="prose" style={{ margin: "0.3rem 0 0", fontSize: "0.87rem" }}>{a.why}</p> : null}
               {a.how ? (
                 <p className="hint" style={{ margin: "0.35rem 0 0" }}>
-                  <strong>How:</strong> {a.how}
+                  <strong>{t("score.how")}</strong> {a.how}
                 </p>
               ) : null}
             </div>
@@ -132,7 +136,7 @@ export function ScorecardPage() {
         ))}
         <div className="split mt">
           <button className="btn btn--ghost" onClick={build} disabled={busy}>
-            {busy ? "Rebuilding…" : "Rebuild from latest answers"}
+            {busy ? t("score.building") : t("score.rebuild")}
           </button>
           <Link className="btn btn--ghost" to={`/session/${session?.id}/letter`}>
             Write a cover letter

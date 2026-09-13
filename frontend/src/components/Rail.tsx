@@ -4,17 +4,20 @@ import { Link, NavLink, useLocation, useParams } from "react-router-dom";
 import { api } from "../api/client";
 import type { SessionOut } from "../api/types";
 import { StepProgress } from "./gauges";
+import { useT, type Key } from "../lib/i18n";
+
+type T = ReturnType<typeof useT>["t"];
 /** The five stages are a real sequence — documents feed the analysis, the
  *  analysis feeds the questions, the answers feed the scorecard — so numbering
  *  them encodes the dependency rather than decorating the list. */
 const STAGES = [
-  { n: 1, to: "upload", label: "Documents" },
-  { n: 2, to: "report", label: "Gap analysis" },
-  { n: 3, to: "room", label: "Practice" },
-  { n: 4, to: "scorecard", label: "Scorecard" },
-  { n: 5, to: "letter", label: "Cover letter" },
-  { n: 6, to: "coach", label: "Coach" },
-] as const;
+  { n: 1, to: "upload", label: "stage.documents" },
+  { n: 2, to: "report", label: "stage.report" },
+  { n: 3, to: "room", label: "stage.room" },
+  { n: 4, to: "scorecard", label: "stage.scorecard" },
+  { n: 5, to: "letter", label: "stage.letter" },
+  { n: 6, to: "coach", label: "stage.coach" },
+] as const satisfies readonly { n: number; to: string; label: Key }[];
 
 type Stage = (typeof STAGES)[number];
 
@@ -34,35 +37,36 @@ function isDone(stage: Stage, s: SessionOut | null): boolean {
 
 /** Why a stage cannot be opened yet — shown to the user rather than left as a
  *  dead link with no explanation. */
-function blockedBecause(stage: Stage, s: SessionOut | null): string | null {
-  if (!s) return "Loading…";
+function blockedBecause(stage: Stage, s: SessionOut | null, t: T): string | null {
+  if (!s) return null;
   if (stage.to === "upload") return null;
-  if (!bothDocumentsReady(s)) return "Add your CV and the job description first";
+  if (!bothDocumentsReady(s)) return t("rail.needDocs");
   if (stage.to === "report") return null;
-  if (!s.has_analysis) return "Run the gap analysis first";
-  if (stage.to === "scorecard" && s.answered_count === 0) return "Answer a question first";
+  if (!s.has_analysis) return t("rail.needAnalysis");
+  if (stage.to === "scorecard" && s.answered_count === 0) return t("rail.needAnswer");
   // The letter is written from the gap analysis alone, so it unlocks with it —
   // it does not need a scorecard the way the rail's order might suggest.
   return null;
 }
 
 /** A short progress note, so the rail carries state and not just labels. */
-function progress(stage: Stage, s: SessionOut | null): string | null {
+function progress(stage: Stage, s: SessionOut | null, t: T): string | null {
   if (!s) return null;
   if (stage.to === "upload") {
     const ready = s.documents.filter((d) => d.ingest_status === "ready").length;
-    return ready === 2 ? "CV + job description" : `${ready} of 2`;
+    return ready === 2 ? t("rail.bothDocs") : t("rail.docsOf", { n: ready });
   }
   if (stage.to === "room" && s.question_count > 0) {
-    return `${s.answered_count} of ${s.question_count} answered`;
+    return t("rail.answeredOf", { done: s.answered_count, total: s.question_count });
   }
   if (stage.to === "scorecard" && s.readiness_score != null) {
-    return `${s.readiness_score}/100 ready`;
+    return t("rail.ready", { n: s.readiness_score });
   }
   return null;
 }
 
 function SessionSwitcher({ currentId }: { currentId: number }) {
+  const { t } = useT();
   const [sessions, setSessions] = useState<SessionOut[] | null>(null);
   const [open, setOpen] = useState(false);
 
@@ -75,11 +79,11 @@ function SessionSwitcher({ currentId }: { currentId: number }) {
   return (
     <details className="disclose switcher" open={open}
              onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
-      <summary>Switch session</summary>
+      <summary>{t("stage.switch")}</summary>
       {sessions === null ? (
-        <p className="hint switcher__empty">Loading…</p>
+        <p className="hint switcher__empty">{t("common.loading")}</p>
       ) : others.length === 0 ? (
-        <p className="hint switcher__empty">This is your only session.</p>
+        <p className="hint switcher__empty">{t("stage.onlySession")}</p>
       ) : (
         <ul className="switcher__list">
           {others.map((s) => (
@@ -91,12 +95,13 @@ function SessionSwitcher({ currentId }: { currentId: number }) {
           ))}
         </ul>
       )}
-      <Link to="/" className="switcher__new">+ New session</Link>
+      <Link to="/" className="switcher__new">{t("stage.newSession")}</Link>
     </details>
   );
 }
 
 export function Rail({ session }: { session: SessionOut | null }) {
+  const { t } = useT();
   const { id } = useParams();
   // useLocation rather than window.location: the rail must re-render when the
   // route changes, and reading the global would not subscribe it to that.
@@ -106,7 +111,7 @@ export function Rail({ session }: { session: SessionOut | null }) {
     <nav className="rail" aria-label="Main">
       {id ? (
         <div className="rail__ctx">
-          <Link to="/" className="rail__back label">← All sessions</Link>
+          <Link to="/" className="rail__back label">← {t("stage.allSessions")}</Link>
           <h2 className="rail__title">{session?.title ?? "…"}</h2>
           {session?.target_role ? (
             <p className="rail__role">{session.target_role}</p>
@@ -114,6 +119,10 @@ export function Rail({ session }: { session: SessionOut | null }) {
           <StepProgress
             done={STAGES.filter((st) => isDone(st, session)).length}
             total={STAGES.length}
+            label={t("stage.ofStages", {
+              done: STAGES.filter((st) => isDone(st, session)).length,
+              total: STAGES.length,
+            })}
           />
           <SessionSwitcher currentId={Number(id)} />
         </div>
@@ -122,8 +131,8 @@ export function Rail({ session }: { session: SessionOut | null }) {
       {id ? (
         <ol className="stepper">
           {STAGES.map((stage) => {
-            const blocked = blockedBecause(stage, session);
-            const note = progress(stage, session);
+            const blocked = blockedBecause(stage, session, t);
+            const note = progress(stage, session, t);
             const state = active === stage.to ? "active" : isDone(stage, session) ? "done" : "todo";
             return (
               <li key={stage.to} className="step" data-state={state} aria-disabled={!!blocked}>
@@ -134,7 +143,7 @@ export function Rail({ session }: { session: SessionOut | null }) {
                   title={blocked ?? undefined}
                   aria-current={active === stage.to ? "page" : undefined}
                 >
-                  {stage.label}
+                  {t(stage.label)}
                 </NavLink>
                 {note && !blocked ? <span className="step__meta">{note}</span> : null}
                 {blocked && active !== stage.to ? (

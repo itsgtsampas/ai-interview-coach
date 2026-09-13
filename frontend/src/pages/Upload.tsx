@@ -4,6 +4,7 @@ import { Link, useNavigate, useOutletContext } from "react-router-dom";
 import { api } from "../api/client";
 import type { DocumentKind, DocumentOut, SessionOut } from "../api/types";
 import { ErrorBox, Head, Row, Spinner } from "../components/bits";
+import { useT } from "../lib/i18n";
 
 interface Ctx { session: SessionOut | null; refresh: () => Promise<void> }
 
@@ -57,6 +58,7 @@ function FilePicker({
 
 export function Upload() {
   const { session, refresh } = useOutletContext<Ctx>();
+  const { t } = useT();
   const [docs, setDocs] = useState<DocumentOut[]>([]);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState<DocumentKind | null>(null);
@@ -119,15 +121,14 @@ export function Upload() {
 
   return (
     <div className="sheet">
-      <Head margin={<span className="label">Stage 1</span>}>
-        <h1 className="display h1">{session?.title ?? "Session"}</h1>
+      <Head margin={<span className="label">{t("stage.label")} 1</span>}>
+        <h1 className="display h1">{session?.title ?? t("upload.title")}</h1>
         <p className="prose" style={{ marginBottom: 0 }}>
-          Your CV as a PDF, and the job description however you have it — pasted from
-          the posting, or as a file.
+          {t("upload.lead")}
         </p>
       </Head>
 
-      <Row margin={<span className="label">Your CV</span>}>
+      <Row margin={<span className="label">{t("upload.yourCv")}</span>}>
         {cv ? (
           <p className="hint" style={{ margin: "0 0 0.7rem" }}>
             Started from the CV on <Link to="/profile">your profile</Link>. Replacing it
@@ -141,7 +142,7 @@ export function Upload() {
         )}
         <FilePicker
           title="CV" doc={cv} busy={busy === "cv"}
-          hint="A text-based PDF — the kind where you can select the text in a reader. Scans are rejected rather than misread."
+          hint={t("upload.cvHint")}
           onPick={(f) => upload("cv", f)}
         />
       </Row>
@@ -149,13 +150,13 @@ export function Upload() {
       <Row
         margin={
           <>
-            <span className="label">Job description</span>
+            <span className="label">{t("upload.jd")}</span>
             {jd?.ingest_status !== "ready" ? (
               <button
                 className="btn btn--link"
                 onClick={() => { setJdAsFile(!jdAsFile); setError(null); }}
               >
-                {jdAsFile ? "Paste text instead" : "Upload a PDF instead"}
+                {jdAsFile ? t("upload.pasteInstead") : t("upload.uploadInstead")}
               </button>
             ) : null}
           </>
@@ -176,7 +177,7 @@ export function Upload() {
         ) : jdAsFile ? (
           <FilePicker
             title="Job description" doc={jd} busy={busy === "jd"}
-            hint="Save the posting as a PDF and choose it here."
+            hint={t("upload.jdHint")}
             onPick={(f) => upload("jd", f)}
           />
         ) : (
@@ -197,11 +198,11 @@ export function Upload() {
                 onClick={paste}
                 disabled={busy === "jd" || jdText.trim().length < 200}
               >
-                {busy === "jd" ? "Reading…" : "Use this job description"}
+                {busy === "jd" ? t("upload.reading") : t("upload.usePasted")}
               </button>
               <span className="hint">
                 {jdText.trim().length < 200
-                  ? `${jdText.trim().length} of 200 characters minimum`
+                  ? t("upload.minChars", { n: jdText.trim().length })
                   : `${jdText.trim().length.toLocaleString()} characters`}
               </span>
             </div>
@@ -213,17 +214,16 @@ export function Upload() {
         <ErrorBox error={error} />
       </Row>
 
-      <Row margin={<span className="label">Next</span>}>
+      <Row margin={<span className="label">{t("common.next")}</span>}>
         <p className="prose">
-          The analysis reads every requirement in the job description and searches your CV
-          for evidence of each one.
+          {t("upload.nextLead")}
         </p>
         <button className="btn" onClick={analyse} disabled={!ready || analysing}>
-          {analysing ? "Analysing…" : "Run gap analysis"}
+          {analysing ? t("report.running") : t("report.run")}
         </button>
         {!ready ? (
           <p className="hint" style={{ marginTop: "0.6rem" }}>
-            Both documents are needed first.
+            {t("upload.bothNeeded")}
           </p>
         ) : null}
       </Row>
