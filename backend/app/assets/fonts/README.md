@@ -1,15 +1,15 @@
-# Optional Unicode font
+# Bundled Unicode font
 
-The scorecard PDF renders with fpdf2's built-in Helvetica, whose encoding is
-Latin-1. That covers English and the typographic punctuation this application
-produces (see `_SANITISE` in `app/services/pdf_export.py`), but not Greek,
-Cyrillic or CJK — those characters are replaced with `?`.
+`DejaVuSans*.ttf` — used by the scorecard PDF export (`app/services/pdf_export.py`).
 
-To render the full Unicode range, drop a TrueType font here:
+fpdf2's built-in Helvetica is Latin-1, so without a TrueType face a Greek
+scorecard renders as `?`. These are registered automatically when present; if
+they are removed the export falls back to Helvetica and transliterates, which
+still works for English.
 
-    app/assets/fonts/DejaVuSans.ttf
-    app/assets/fonts/DejaVuSans-Bold.ttf
+DejaVu Sans 2.37, from the project's own release:
+<https://github.com/dejavu-fonts/dejavu-fonts>
 
-`pdf_export.py` detects them on startup and registers them automatically; no
-code change is needed. They are not committed because a ~1.5 MB binary in a
-teaching repository has to earn its place, and the English path does not need it.
+Licence in `LICENSE.dejavu.txt`. Bitstream Vera plus Arev — both permit
+redistribution and modification without fee, which is why this face and not a
+system font: macOS and Microsoft faces cannot be committed to a repository.

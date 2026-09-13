@@ -69,9 +69,11 @@ class Scoresheet(FPDF):
         self.set_margins(20, 18, 20)
 
     def clean(self, text: str) -> str:
-        text = (text or "").translate(_SANITISE)
         if self.sans == "DejaVu":
-            return text
+            # A Unicode face needs none of the transliteration below, so em
+            # dashes, curly quotes and Greek all render as written.
+            return text or ""
+        text = (text or "").translate(_SANITISE)
         # Anything still outside Latin-1 would raise at render time.
         return text.encode("latin-1", "replace").decode("latin-1")
 
@@ -172,13 +174,19 @@ class Scoresheet(FPDF):
 
 
 def _register_unicode(pdf: Scoresheet) -> bool:
+    """Register the bundled Unicode face, if it is present.
+
+    Without it the export falls back to Helvetica, which is Latin-1: a Greek
+    scorecard renders as question marks. See assets/fonts/README.
+    """
     regular = FONT_DIR / "DejaVuSans.ttf"
-    bold = FONT_DIR / "DejaVuSans-Bold.ttf"
     if not regular.exists():
         return False
+    bold = FONT_DIR / "DejaVuSans-Bold.ttf"
+    oblique = FONT_DIR / "DejaVuSans-Oblique.ttf"
     pdf.add_font("DejaVu", "", str(regular))
     pdf.add_font("DejaVu", "B", str(bold if bold.exists() else regular))
-    pdf.add_font("DejaVu", "I", str(regular))
+    pdf.add_font("DejaVu", "I", str(oblique if oblique.exists() else regular))
     return True
 
 
