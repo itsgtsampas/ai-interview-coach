@@ -9,6 +9,21 @@ Final project for **AI for Developers**, AUEB Centre for Training and Lifelong L
 
 ---
 
+## Documentation
+
+**[docs/documentation.pdf](docs/documentation.pdf)** — the full write-up: purpose,
+architecture and data flow, every GenAI technique and why it was chosen, the RAG
+pipeline, the FastAPI endpoints, the UI, the evaluation results, a worked
+example, limitations and future extensions. Screenshots are in
+[docs/screenshots/](docs/screenshots/).
+
+Supporting detail lives alongside it: [DESIGN.md](docs/DESIGN.md) for the design
+rationale and the decisions taken along the way, [evaluation.md](docs/evaluation.md)
+for the harness and what it found, [IMPLEMENTATION.md](docs/IMPLEMENTATION.md) for
+seminar-technique coverage.
+
+---
+
 ## Runs on the OpenAI API
 
 Every reasoning stage — requirement extraction, the gap analysis, question generation,

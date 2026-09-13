@@ -118,13 +118,17 @@ Legend: **✅ built and exercised** · **🟡 partial** · **⬜ not started**
 | WCAG AA contrast on every text node | ✅ Audited at rendered size across all 7 pages; two palette tokens darkened (DESIGN §16.8) |
 | Types generated from OpenAPI (`openapi-typescript`) | 🟡 Hand-written to mirror the schema |
 
-## 6. Not started (project deliverables)
+## 6. Remaining deliverables
 
-- `documentation.pdf` (the assessed written deliverable)
+- ~~`documentation.pdf`~~ — **done**: 20 pages, covering every item the brief's
+  "Περιεχόμενο Documentation" slide lists. Rebuild with
+  `backend/.venv/bin/python docs/build/render_documentation.py`.
+- ~~Screenshots~~ — **done**: 10 unretouched captures in `docs/screenshots/`,
+  seven of them used in the documentation.
 - `docs/prompts.md` — every prompt in PCTF form with version history, scored on the
   Άσκηση 5 rubric. Now covers **eight** stages: the original five plus `coach_agent`,
   `rewrite_bullet` and `cover_letter`.
-- Screenshots and demo video
+- Optional demo video
 - Running the three measurements the harness implements but could not exercise offline:
   the few-shot/zero-shot prompt ablation, self-consistency, and LLM-as-judge agreement.
   The provider is now live, so these are unblocked.
