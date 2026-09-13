@@ -16,8 +16,9 @@ import json
 
 from app.llm.base import RenderedPrompt
 from app.prompts.blocks import fence, json_only, pctf
+from app.textutil import detect_language
 
-VERSION = "rewrite_bullet.v1"
+VERSION = "rewrite_bullet.v2"
 
 PERSONA = (
     "You are a CV editor who has screened thousands of engineering CVs. You know "
@@ -90,6 +91,7 @@ def render(requirement: str, status: str, evidence: str | None, cv_context: str)
             context=CONTEXT + "\n\nWorked examples:\n" + EXAMPLES,
             task=TASK,
             output_format=FORMAT,
+            language=detect_language(cv_context),
         ),
         user=(
             f"Requirement: {requirement}\n"

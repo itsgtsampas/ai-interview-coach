@@ -9,8 +9,9 @@ import json
 
 from app.llm.base import RenderedPrompt
 from app.prompts.blocks import fence, json_only, pctf
+from app.textutil import detect_language
 
-VERSION = "analyse_match.v3"
+VERSION = "analyse_match.v4"
 
 PERSONA = (
     "You are a senior hiring manager with twelve years of experience screening "
@@ -68,7 +69,9 @@ def render(requirements: list[dict], evidence: dict[str, list[dict]]) -> Rendere
     return RenderedPrompt(
         stage="analyse_match",
         version=VERSION,
-        system=pctf(persona=PERSONA, context=CONTEXT, task=TASK, output_format=FORMAT),
+        system=pctf(persona=PERSONA, context=CONTEXT, task=TASK,
+                    output_format=FORMAT,
+                    language=detect_language(json.dumps(evidence, ensure_ascii=False))),
         user=fence("retrieved_evidence", "\n\n".join(blocks)),
         payload={"requirements": requirements, "evidence": evidence},
     )

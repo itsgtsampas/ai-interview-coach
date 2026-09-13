@@ -138,6 +138,7 @@ def stream(session: InterviewSession, db: Session, tone: str = "plain") -> Itera
         evidenced=evidenced,
         unevidenced=unevidenced,
         tone=tone,
+        streaming=True,
     )
 
     parts: list[str] = []

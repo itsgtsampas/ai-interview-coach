@@ -119,3 +119,29 @@ def test_a_stream_for_someone_elses_question_is_refused_with_a_status_code(
         headers={"Authorization": f"Bearer {token}"},
     )
     assert r.status_code == 404
+
+
+def test_a_streamed_letter_is_prose_not_json(auth_client, answered_session):
+    """The streaming path must not stream the JSON envelope.
+
+    The cover letter's normal FORMAT block demands "return ONLY a single JSON
+    object". Streamed, that means the reader watches `{"subject": "...` appear
+    character by character and the whole object lands in the stored body. The
+    offline double hid this by returning only the body text; a real provider
+    does what the prompt says.
+    """
+    sid = answered_session
+    with auth_client.stream(
+        "POST", f"/api/v1/sessions/{sid}/cover-letter/stream", json={"tone": "plain"},
+    ) as response:
+        events = parse_sse("".join(response.iter_text()))
+
+    body = "".join(d["text"] for n, d in events if n == "token")
+    assert body, "nothing streamed"
+    assert not body.lstrip().startswith("{"), f"streamed raw JSON: {body[:80]!r}"
+    for marker in ('"subject"', '"claims_used"', '"body":'):
+        assert marker not in body, f"JSON envelope leaked into the letter: {marker}"
+
+    stored = auth_client.get(f"/api/v1/sessions/{sid}/cover-letter").json()
+    assert stored["body"] == body
+    assert not stored["body"].lstrip().startswith("{")

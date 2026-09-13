@@ -5,10 +5,13 @@ exemplars below pin the register (specific, evidence-anchored, uncomfortable
 where it should be) far more reliably than adjectives would.
 """
 
+import json
+
 from app.llm.base import RenderedPrompt
 from app.prompts.blocks import fence, json_only, pctf
+from app.textutil import detect_language
 
-VERSION = "generate_questions.v2"
+VERSION = "generate_questions.v3"
 
 PERSONA = (
     "You are the hiring manager who will actually run this interview. You ask "
@@ -74,6 +77,7 @@ def render(items: list[dict], target_role: str, n_technical: int, n_behavioural:
             context=CONTEXT + "\n\nExemplars showing the required register:\n" + EXEMPLARS,
             task=TASK,
             output_format=FORMAT,
+            language=detect_language(summary),
         ),
         user=(
             f"Target role: {target_role or 'unspecified'}\n"

@@ -15,8 +15,9 @@ import json
 
 from app.llm.base import RenderedPrompt
 from app.prompts.blocks import json_only, pctf
+from app.textutil import detect_language
 
-VERSION = "cover_letter.v1"
+VERSION = "cover_letter.v2"
 
 TONES = {
     "plain": "Direct and unadorned. Short sentences. No adjectives about yourself.",
@@ -54,6 +55,16 @@ TASK = """
    No "dynamic". No "team player".
 """
 
+# The streaming path asks for prose, not JSON. Streaming a stage whose FORMAT
+# block demands "return ONLY a single JSON object" means streaming the JSON: the
+# reader watches `{"subject": "...", "body": "...` appear character by character,
+# and the whole object lands in the stored letter body.
+FORMAT_PROSE = (
+    "Return ONLY the letter itself, as plain paragraphs separated by blank "
+    "lines. No JSON, no markdown, no subject line, no preamble and no sign-off "
+    "block - just the body of the letter."
+)
+
 FORMAT = json_only(
     '{"subject": "...", "body": "the letter as plain paragraphs separated by '
     'blank lines", "claims_used": ["requirement text", ...]}'
@@ -66,6 +77,8 @@ def render(
     evidenced: list[dict],
     unevidenced: list[str],
     tone: str = "plain",
+    *,
+    streaming: bool = False,
 ) -> RenderedPrompt:
     return RenderedPrompt(
         stage="cover_letter",
@@ -74,7 +87,8 @@ def render(
             persona=PERSONA,
             context=CONTEXT + f"\n\nTone for this letter: {TONES.get(tone, TONES['plain'])}",
             task=TASK,
-            output_format=FORMAT,
+            output_format=FORMAT_PROSE if streaming else FORMAT,
+            language=detect_language(json.dumps(evidenced, ensure_ascii=False)),
         ),
         user=(
             f"Role: {role or 'the advertised role'}\n"

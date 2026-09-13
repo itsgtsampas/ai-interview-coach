@@ -100,6 +100,28 @@ SYNONYMS: dict[str, set[str]] = {
 }
 
 
+# Naming the language outright beats asking the model to infer it. An English
+# system prompt anchors the reply to English hard enough that "answer in the
+# same language as the CV" is simply ignored, which is what happened here.
+_GREEK_CHARS = re.compile(r"[\u0370-\u03FF\u1F00-\u1FFF]")
+_LATIN_CHARS = re.compile(r"[A-Za-z]")
+_GREEK_SHARE = 0.15
+
+
+def detect_language(text: str) -> str:
+    """"Greek" or "English", from the script the text is mostly written in.
+
+    A Greek CV is full of Latin technology names, so the test is a share rather
+    than a presence: well below half, because "Java, Spring Boot, PostgreSQL,
+    Docker" in a skills section can easily outweigh a short Greek summary.
+    """
+    greek = len(_GREEK_CHARS.findall(text))
+    latin = len(_LATIN_CHARS.findall(text))
+    if greek + latin == 0:
+        return "English"
+    return "Greek" if greek / (greek + latin) >= _GREEK_SHARE else "English"
+
+
 def fold(text: str) -> str:
     """Lowercase, strip diacritics, and normalise final sigma.
 

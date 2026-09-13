@@ -9,10 +9,13 @@ Techniques:
     (Note: PCTF builds this prompt; PCTF is not itself the scoring rubric.)
 """
 
+import json
+
 from app.llm.base import RenderedPrompt
 from app.prompts.blocks import fence, json_only, pctf
+from app.textutil import detect_language
 
-VERSION = "evaluate_answer.v4"
+VERSION = "evaluate_answer.v5"
 
 PERSONA = (
     "You are an interview coach who has debriefed hundreds of real interview "
@@ -72,6 +75,7 @@ def render(question: str, answer_text: str, rubric: str, linked_requirement: str
             context=CONTEXT + "\n" + ANCHORS,
             task=TASK,
             output_format=FORMAT,
+            language=detect_language(answer_text),
         ),
         user=(
             f"Rubric to apply: {rubric}\n"

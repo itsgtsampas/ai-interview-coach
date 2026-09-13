@@ -5,10 +5,13 @@ tool call until it has enough evidence, then answers. The loop is bounded at
 four iterations so a confused model cannot spin.
 """
 
+import json
+
 from app.llm.base import RenderedPrompt
 from app.prompts.blocks import fence, pctf
+from app.textutil import detect_language
 
-VERSION = "coach_agent.v1"
+VERSION = "coach_agent.v2"
 
 PERSONA = (
     "You are the candidate's interview coach. You have access to their file "
@@ -37,7 +40,9 @@ def render(message: str, tool_names: list[str]) -> RenderedPrompt:
     return RenderedPrompt(
         stage="coach_agent",
         version=VERSION,
-        system=pctf(persona=PERSONA, context=CONTEXT, task=TASK, output_format=FORMAT),
+        system=pctf(persona=PERSONA, context=CONTEXT, task=TASK,
+                    output_format=FORMAT,
+                    language=detect_language(message)),
         user=f"Available tools: {', '.join(tool_names)}\n\n"
              + fence("candidate_answer", message),
         payload={"message": message},

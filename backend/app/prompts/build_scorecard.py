@@ -21,8 +21,9 @@ import json
 
 from app.llm.base import RenderedPrompt
 from app.prompts.blocks import json_only, pctf
+from app.textutil import detect_language
 
-VERSION = "build_scorecard.v2"
+VERSION = "build_scorecard.v3"
 
 PERSONA = (
     "You are the interviewer writing the debrief note after a loop. You are "
@@ -64,7 +65,9 @@ def render(report: dict, evaluations: list[dict]) -> RenderedPrompt:
     return RenderedPrompt(
         stage="build_scorecard",
         version=VERSION,
-        system=pctf(persona=PERSONA, context=CONTEXT, task=TASK, output_format=FORMAT),
+        system=pctf(persona=PERSONA, context=CONTEXT, task=TASK,
+                    output_format=FORMAT,
+                    language=detect_language(json.dumps(report, ensure_ascii=False))),
         user=(
             "Gap analysis:\n"
             + json.dumps(report, ensure_ascii=False, indent=2)[:6000]

@@ -5,10 +5,13 @@ words; exemplars would add tokens without adding accuracy. This is also the
 baseline the eval harness compares few-shot variants against.
 """
 
+import json
+
 from app.llm.base import RenderedPrompt
 from app.prompts.blocks import fence, json_only, pctf
+from app.textutil import detect_language
 
-VERSION = "extract_requirements.v2"
+VERSION = "extract_requirements.v3"
 
 PERSONA = (
     "You are a technical recruiter who has screened several thousand engineering "
@@ -43,7 +46,9 @@ def render(jd_text: str) -> RenderedPrompt:
     return RenderedPrompt(
         stage="extract_requirements",
         version=VERSION,
-        system=pctf(persona=PERSONA, context=CONTEXT, task=TASK, output_format=FORMAT),
+        system=pctf(persona=PERSONA, context=CONTEXT, task=TASK,
+                    output_format=FORMAT,
+                    language=detect_language(jd_text)),
         user=fence("job_description", jd_text),
         payload={"jd_text": jd_text},
     )
